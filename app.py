@@ -22,8 +22,9 @@ mem()
 
 # Scipy libs
 import numpy as np
+import matplotlib
+matplotlib.use("TkAgg")
 from matplotlib import cm
-from mpl_toolkits.basemap import Basemap
 
 print("After Scipy Imports M.S.:")
 mem()
