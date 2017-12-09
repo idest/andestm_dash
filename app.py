@@ -30,7 +30,7 @@ mem()
 
 # My modules
 import setup
-from compute import compute
+from compute_memsave import compute
 from utils import DotDict, cmap_to_cscale
 from meccolormap import jet_white_r
 
