@@ -195,7 +195,7 @@ def plot_map_data(latitude, map_grid):
 def plot_cross_section_data(latitude, cross_section_grid):
     colorscale = choose_cross_section_colorscale(cross_section_grid)
     grid = cross_section_grids()[cross_section_grid]
-    index = np.where(get_y_axis() == latitude)[0][0]
+    #index = np.where(get_y_axis() == latitude)[0][0]
     #print(index)
     #print(cross_section_grid)
     #print(type(grid))

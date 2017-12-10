@@ -203,6 +203,24 @@ class CoordinateSystem(object):
     def get_3D_shape(self):
         return len(self.x_axis), len(self.y_axis), len(self.z_axis)
 
+    """
+    def get_2D_grid(self):
+        grid_2D = self.__set_grid([self.x_axis, self.y_axis])
+        grid_2D_relevant = []
+        for n in range(len(grid_2D)):
+            grid_2D_relevant.append(SpatialArray2D(grid_2D[n],
+                                                   self).mask_irrelevant())
+        return grid_2D_relevant
+
+    def get_3D_grid(self):
+        grid_3D = self.__set_grid([self.x_axis, self.y_axis, self.z_axis])
+        grid_3D_relevant = []
+        for n in range(len(grid_3D)):
+            grid_3D_relevant.append(SpatialArray3D(grid_3D[n],
+                                                   self).mask_irrelevant())
+        return grid_3D_relevant
+    """
+
     def get_2D_grid(self):
         grid_2D = []
         for n in range(len(self.grid_2D)):
@@ -500,7 +518,7 @@ class GeometricModel(object):
                 a = np.nan
             with np.errstate(invalid='ignore'): # error_ignore
                 geo_model_3D[z < c] = a
-        return SpatialArray3D(geo_model_3D, self.cs).mask_irrelevant()
+        return SpatialArray3D(geo_model_3D, self.cs)#.mask_irrelevant()
 
     def sencos(self):
         A = self.cs.get_2D_grid()[0]
