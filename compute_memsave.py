@@ -918,11 +918,11 @@ class MechanicModel(object):
     @staticmethod
     def __calc_ductile_yield_strength(es, n, a, h, r, temp):
         # TODO: optimize memory usage of this function
-        with np.errstate(over='ignore'):
-            dys = (es/a)**(1/n)*np.exp(h/(n*r*(temp+273.15)))*1.e-6
-        return dys
+        #with np.errstate(over='ignore'):
+        #    dys = (es/a)**(1/n)*np.exp(h/(n*r*(temp+273.15)))*1.e-6
+        #return dys
         print("__calc_ductile_yield_strength")
-        """
+        #"""
         mem()
         result = np.empty(temp.shape)
         stored_value = np.empty(temp.shape)
@@ -930,14 +930,14 @@ class MechanicModel(object):
         np.multiply(r, result, result)
         np.multiply(n, result, result)
         np.divide(h, result, result)
-        np.exp(result, stored_value)
-        np.multiply(1.e-6, stored_value, result)
-        np.divide(1, n, stored_value)
-        np.multiply(stored_value, result,result)
-        np.divide(es, a, stored_value)
+        np.exp(result, result)
+        np.multiply(1.e-6, result, stored_value)
+        np.divide(es, a, result)
         with np.errstate(over='ignore'):
-            np.power(stored_value, result, result)
-        """
+            np.power(result, (1/n), result)
+        #np.divide(1, n, stored_value)
+        np.multiply(result, stored_value,result)
+        #"""
         print("operations")
         mem()
         return result
@@ -1104,7 +1104,7 @@ class MechanicModel(object):
         return SpatialArray3D(self.yse_t, self.cs), SpatialArray3D(self.yse_c, self.cs)
 
     def get_eet(self):
-        return SpatialArray2D(self.eet)
+        return SpatialArray2D(self.eet, self.cs).mask_irrelevant()
 
 
 def compute(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input):
