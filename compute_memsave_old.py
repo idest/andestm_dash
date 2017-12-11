@@ -2,8 +2,6 @@ import math
 import numpy as np
 from dotmap import DotMap
 import resource
-import multiprocessing as mp
-import gc
 
 def mem():
     print('Memory usage         : % 2.2f MB' % round(
@@ -123,11 +121,9 @@ class CoordinateSystem(object):
         self.grid_2D = self.__set_grid([self.x_axis, self.y_axis])
         print("self.grid_2d")
         mem()
-        #self.grid_3D = self.__set_grid([self.x_axis, self.y_axis, self.z_axis])
-        #print("self.grid_3d")
-        #mem()
-        self.z_grid = self.__set_z_grid()
-        #assert(self.grid_3D[2].all() == self.z_grid.all())
+        self.grid_3D = self.__set_grid([self.x_axis, self.y_axis, self.z_axis])
+        print("self.grid_3d")
+        mem()
         self.populated_points = cs_data.populated_points
         print("self.populated_points")
         mem()
@@ -151,12 +147,6 @@ class CoordinateSystem(object):
         return np.linspace(first_v, last_v,
                            num=(abs(last_v-first_v))/step+1,
                            endpoint=True)
-
-    def __set_z_grid(self):
-        z_grid = np.empty((len(self.x_axis), len(self.y_axis), len(self.z_axis))).astype(float, copy=False)
-        z_grid[:] = self.z_axis[np.newaxis, np.newaxis, :]
-        print(z_grid.shape)
-        return z_grid
 
     def __set_grid(self, axes, mask=False):
         grid = np.meshgrid(*[n for n in axes], indexing='ij')
@@ -244,12 +234,6 @@ class CoordinateSystem(object):
             grid_3D.append(SpatialArray3D(self.grid_3D[n],
                                           self).mask_irrelevant())
         return grid_3D
-
-    def get_2D_grid(self):
-        return self.grid_2D
-
-    def get_3D_grid(self):
-        return [0,0, SpatialArray3D(self.z_grid, self)]
 
     #def get_2D_indexes(self):
     #    indexes_arrays = np.indices(self.get_2D_shape())
@@ -357,18 +341,14 @@ class SpatialArray2D(SpatialArray):
     def get_array(self):
         return self
 
-    def mask_irrelevant(self, irrelevant=None):
-        if irrelevant is not None:
-            mask = irrelevant
-        else:
-            mask = np.invert(self.cs.get_relevant_area())
-        #masked_array = self.copy()
-        self = self.astype(float, copy=False)
-        self[mask] = np.nan
+    def mask_irrelevant(self, nan_fill=False):
+        mask = np.invert(self.cs.get_relevant_area())
+        masked_array = self.copy()
+        masked_array[mask] = np.nan
         #masked_array = np.ma.array(self, mask=mask)
         #if nan_fill is True:
         #    masked_array = masked_array.filled(np.nan)
-        return self
+        return masked_array
 
     def cross_section(self, latitude=None, longitude=None,
                       lat1=None, lon1=None, lat2=None, lon2=None):
@@ -410,35 +390,24 @@ class SpatialArray3D(SpatialArray):
         obj = super(SpatialArray3D, cls).__new__(cls, input_array, coordinate_system)
         return obj
 
-    def mask_irrelevant(self, irrelevant=None):
-        if irrelevant is not None:
-            mask = irrelevant
-        else:
-            mask = np.invert(self.cs.get_relevant_volume())
-        #masked_array = self.copy()
-        self[mask] = np.nan
+    def mask_irrelevant(self, nan_fill=True):
+        mask = np.invert(self.cs.get_relevant_volume())
+        masked_array = self.copy()
+        masked_array[mask] = np.nan
         #masked_array = np.ma.array(self, mask=mask)
         #if nan_fill is True:
         #    masked_array = masked_array.filled(np.nan)
-        return self
+        return masked_array
 
     def extract_surface(self, z_2D):
         z_2D = np.ceil(z_2D)
         z_3D = self.cs.get_3D_grid()[2]
-
-        a_old = z_3D != z_2D[:, :, np.newaxis]
+        a = z_3D != z_2D[:, :, np.newaxis]
         array_3D = self.copy()
-        array_3D[a_old] = 0
-        surface_old = np.sum(array_3D, axis=2)
-        surface_old[surface_old == 0] = np.nan
-
-        #a = np.where(z_3D == np.nan_to_num(z_2D[:, :, np.newaxis]))
-        #surface = z_3D[a]
-        #surface = surface.reshape(z_2D.shape)
-        #assert(surface_old.all() == SpatialArray2D(surface, self.cs).mask_irrelevant().all())
-        #return SpatialArray2D(surface, z_2D.cs).mask_irrelevant()
-        return SpatialArray2D(surface_old, z_2D.cs)
-
+        array_3D[a] = 0
+        surface = np.sum(array_3D, axis=2)
+        surface[surface == 0] = np.nan
+        return SpatialArray2D(surface, z_2D.cs)
 
     def crop(self, top_z='top', bottom_z='bottom'):
         z_3D = self.cs.get_3D_grid()[2]
@@ -476,7 +445,7 @@ class SpatialArray3D(SpatialArray):
             cross_section = self[:, index, :]
         elif lat1 and lon1 and lat2 and lon2:
             cross_section = self
-        return cross_section
+        return cross_section 
 
     def divide_by_areas(self, areas):
         array_1, array_2 = super().divide_array_by_areas(self, areas)
@@ -551,6 +520,18 @@ class GeometricModel(object):
                 geo_model_3D[z < c] = a
         return SpatialArray3D(geo_model_3D, self.cs)#.mask_irrelevant()
 
+    def sencos(self):
+        A = self.cs.get_2D_grid()[0]
+        B = self.cs.get_2D_grid()[1]
+        C = A + B
+        return C
+
+    def sencos_sa(self):
+        A = self.cs.get_2D_grid()[0]
+        B = self.cs.get_2D_grid()[1]
+        C = A + B
+        return SpatialArray3D(C, self.cs)
+
     def __set_layer_thickness(self):
         pass
 
@@ -567,7 +548,7 @@ class GeometricModel(object):
         g_mask = i_idx < min_g_idx
         masked_pos_g = np.ma.array(pos_g, mask=g_mask)
         # Get index of first positive gradient (Slab/Lab intersection idx)
-        sli_idx = np.argmax(masked_pos_g, axis=0)
+        sli_idx = np.argmax(masked_pos_g, axis=0) 
         # Get visual boolean representation of sli_idx
         # Z = np.zeros(g.shape)
         # Z[sli_idx, self.cs.get_2D_indexes()[1][0]] = 1
@@ -681,20 +662,13 @@ class ThermalModel(object):
 
     @staticmethod
     def __calc_geotherm(h, delta, k, z, z_topo, z_sl, temp_sl):
-        # TODO: optimize memory usage of this function
-        """
-        z = z*1000
-        z_topo = z_topo*1000
-        z_sl = z_sl*1000
+        z = z*1.e3
+        z_topo = z_topo*1.e3
+        z_sl = z_sl*1.e3
         base_temp = temp_sl-((h*delta**2)/k)*(np.exp(z_topo/delta)
                                               - np.exp(z_sl/delta))
         rad_temp = ((h*delta**2)/k)*(np.exp(z_topo/delta)-np.exp(z/delta))
         geotherm = rad_temp + (abs(z-z_topo)/abs(z_sl-z_topo))*base_temp
-        """
-        geotherm = ((((h*delta**2)/k)*(np.exp((z_topo*1.e3)/delta)-np.exp((z*1.e3)/delta)))
-                    +(abs((z*1.e3)-(z_topo*1.e3))/abs((z_sl*1.e3)-(z_topo*1.e3)))
-                    * (temp_sl-((h*delta**2)/k)*(np.exp((z_topo*1.e3)/delta)
-                                                 - np.exp((z_sl*1.e3)/delta))))
         return geotherm
 
     @staticmethod
@@ -708,7 +682,11 @@ class ThermalModel(object):
 
     def __init__(self, tm_data, geometric_model, coordinate_system):
         self.geo_model = geometric_model
+        print("self.geo_model")
+        mem()
         self.cs = coordinate_system
+        print("self.cs")
+        mem()
         self.vars = DotMap(self.__set_variables(tm_data.t_input,
                                                  tm_data.trench_age))
         print("self.vars")
@@ -747,7 +725,6 @@ class ThermalModel(object):
             r = (sum(rh) / sum(h))[:, :, np.newaxis]
             r = np.repeat(r, self.cs.get_3D_shape()[2], axis=2)
             geo_model_mask = np.isnan(self.geo_model.get_3D_geometric_model())
-            #r = SpatialArray3D(r, self.cs).mask_irrelevant(irrelevant=geo_model_mask)
             r = np.ma.array(r, mask=geo_model_mask).filled(np.nan)
         return SpatialArray3D(r, self.cs)
 
@@ -768,7 +745,6 @@ class ThermalModel(object):
 
     def __set_variables(self, t_input, trench_age):
         t_input = DotMap(t_input)
-        # TODO: find a way to save memory by not storing 3D arrays as k and h
         t_vars = {
             'k_cs': t_input['k_cs'],
             'k_ci': t_input['k_ci'],
@@ -894,7 +870,7 @@ class ThermalModel(object):
             delta = self.vars.delta[:, :, np.newaxis]
         else:
             delta = self.vars.delta
-        z = self.cs.get_3D_grid()[2].mask_irrelevant()
+        z = self.cs.get_3D_grid()[2]
         z_topo = self.geo_model.get_topo()[:, :, np.newaxis]
         z_sl = self.geo_model.get_slab_lab()[:, :, np.newaxis]
         temp_sl = self.slab_lab_temp[:, :, np.newaxis]
@@ -917,30 +893,9 @@ class MechanicModel(object):
 
     @staticmethod
     def __calc_ductile_yield_strength(es, n, a, h, r, temp):
-        # TODO: optimize memory usage of this function
         with np.errstate(over='ignore'):
             dys = (es/a)**(1/n)*np.exp(h/(n*r*(temp+273.15)))*1.e-6
         return dys
-        print("__calc_ductile_yield_strength")
-        """
-        mem()
-        result = np.empty(temp.shape)
-        stored_value = np.empty(temp.shape)
-        np.add(temp, 273.15, result)
-        np.multiply(r, result, result)
-        np.multiply(n, result, result)
-        np.divide(h, result, result)
-        np.exp(result, stored_value)
-        np.multiply(1.e-6, stored_value, result)
-        np.divide(1, n, stored_value)
-        np.multiply(stored_value, result,result)
-        np.divide(es, a, stored_value)
-        with np.errstate(over='ignore'):
-            np.power(stored_value, result, result)
-        """
-        print("operations")
-        mem()
-        return result
 
     @staticmethod
     def __calc_eet_attached(attached_ths):
@@ -959,11 +914,31 @@ class MechanicModel(object):
         return detached_eet
 
     def __init__(self, mm_data, geo_model, thermal_model, coordinate_system):
+        super().__init__()
+        print("superinit")
+        mem()
         self.geo_model = geo_model
+        print("cs.geo_model")
+        mem()
         self.cs = coordinate_system
+        print("self.cs")
+        mem()
         self.thermal_model = thermal_model
+        print("self.thermal_model")
+        mem()
         self.vars = DotMap(self.__set_variables(mm_data.m_input,
                                                  mm_data.rheologic_data))
+        print("self.vars")
+        mem()
+        self.depth_from_topo = self.__set_depth_from_topo()
+        print("self.depth_from_topo")
+        mem()
+        #self.bys_t, self.bys_c = self.__set_brittle_yield_strength()
+        #print("self.bys_t, self.bys_c")
+        #mem()
+        #self.dys = self.__set_ductile_yield_strength()
+        #print("self.dys")
+        #mem()
         self.yse_t, self.yse_c = self.__set_yield_strength_envelope()
         print("self.yse_t, self.yse_c")
         mem()
@@ -1003,24 +978,17 @@ class MechanicModel(object):
         }
         return m_vars
 
-    def __get_depth_from_topo(self):
+    def __set_depth_from_topo(self):
         depth_from_topo = -(self.cs.get_3D_grid()[2]
                             - self.geo_model.get_topo()[:, :, np.newaxis])
-        print(type(depth_from_topo))
-        print(depth_from_topo.shape)
-        return depth_from_topo.mask_irrelevant()
-
-    def __set_test_3D_array(self):
-        array_3D = np.random.randint(1000, size=(101,176,184))
-        return None
+        return depth_from_topo
 
     def __get_brittle_yield_strength(self):
         bs_t = self.vars.bs_t
         bs_c = self.vars.bs_c
         #depth = self.cs.get_3D_indexes()[2]  # needs to be Z from topo
-        depth_from_topo = self.__get_depth_from_topo()
-        depth_from_topo = SpatialArray3D(depth_from_topo.astype(np.float64, copy=False), self.cs).mask_irrelevant()
-        #depth_from_topo = depth_from_topo.astype(np.float64)
+        depth_from_topo = self.depth_from_topo
+        depth_from_topo = SpatialArray3D(depth_from_topo.astype(np.float64), self.cs).mask_irrelevant()
         #depth = self.cs.mask_3d_array(depth.astype(np.float64),
         #                                          nan_fill=True)
         bys_t = self.__calc_brittle_yield_strength(bs_t, depth_from_topo)
@@ -1034,10 +1002,10 @@ class MechanicModel(object):
         cs = self.vars.cs
         ci = self.vars.ci
         ml = self.vars.ml
-        #TODO: find a way to not store these next 3D arrays in memory
         n = self.geo_model.set_layer_property(cs.n, ci.n, ml.n)
         a = self.geo_model.set_layer_property(cs.a, ci.a, ml.a)
         h = self.geo_model.set_layer_property(cs.h, ci.h, ml.h)
+
         dys = self.__calc_ductile_yield_strength(e, n, a, h, r, temp)
         return dys
 
@@ -1045,10 +1013,9 @@ class MechanicModel(object):
         bys_t, bys_c = self.__get_brittle_yield_strength()  # type: np.ndarray
         dys = self.__get_ductile_yield_strength()  # type: np.ndarray
         with np.errstate(invalid='ignore'):
-            pass
             yse_t = np.where(bys_t < dys, bys_t, dys)
             yse_c = np.where(bys_c > dys, bys_c, dys)
-        return yse_t, yse_c
+        return SpatialArray3D(yse_t, self.cs), SpatialArray3D(yse_c, self.cs)
 
     def __get_layer_elastic_tuple(self, elastic_z, layer):
         topo, icd, moho, slablab = self.geo_model.get_boundaries()
@@ -1075,7 +1042,7 @@ class MechanicModel(object):
 
     def __set_eet(self, yse):
         #elastic_z = self.cs.get_3D_grid()[2].copy() # needs to be Z from topo
-        elastic_z = self.__get_depth_from_topo().copy()
+        elastic_z = self.depth_from_topo.copy()
         with np.errstate(invalid='ignore'):
             elastic_z[yse < self.vars.s_max] = np.nan
         uc_tuple, e_z_uc = self.__get_layer_elastic_tuple(elastic_z, 'uc')
@@ -1097,14 +1064,13 @@ class MechanicModel(object):
         detached_eet = self.__calc_eet_detached(detached_ths)
         eet = SpatialArray.combine_arrays_by_areas(attached_eet, detached_eet, share_moho)
 
-        #return SpatialArray2D(eet, self.cs)
-        return eet
+        return SpatialArray2D(eet, self.cs)
 
     def get_yse(self):
-        return SpatialArray3D(self.yse_t, self.cs), SpatialArray3D(self.yse_c, self.cs)
+        return self.yse_t, self.yse_c
 
     def get_eet(self):
-        return SpatialArray2D(self.eet)
+        return self.eet
 
 
 def compute(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input):
