@@ -31,53 +31,9 @@ mem()
 
 # My modules
 import setup
-from compute_memsave import compute
+from compute import compute
 from utils import DotDict, cmap_to_cscale
 from meccolormap import jet_white_r
-from termomecanico_memsave import x_axis
-from termomecanico_memsave import y_axis
-from termomecanico_memsave import z_axis
-from termomecanico_memsave import xy_step
-from termomecanico_memsave import grid_2D
-from termomecanico_memsave import topo
-from termomecanico_memsave import icd
-from termomecanico_memsave import moho
-from termomecanico_memsave import slab_lab
-from termomecanico_memsave import geotherm
-from termomecanico_memsave import yse
-from termomecanico_memsave import shf
-from termomecanico_memsave import eet
-
-def get_x_axis():
-    return x_axis
-def get_y_axis():
-    return y_axis
-def get_z_axis():
-    return z_axis
-def get_xy_step():
-    return xy_step
-def get_x_grid_2D():
-    return grid_2D[0]
-def get_y_grid_2D():
-    return grid_2D[1]
-def get_topo():
-    return topo
-def get_icd():
-    return icd
-def get_moho():
-    return moho
-def get_slab_lab():
-    return slab_lab
-def get_geotherm():
-    return geotherm
-def get_tension_yse():
-    return yse[0]
-def get_compression_yse():
-    return yse[1]
-def get_surface_heat_flow():
-    return shf
-def get_effective_elastic_thickness():
-    return eet
 
 print("After My Modules Imports M.S.:")
 mem()
@@ -89,70 +45,70 @@ mem()
 ########################## Data Manipulation / Model ##########################
 ###############################################################################
 
-## Static Input
-#gm_data = np.loadtxt('data/Modelo.dat')
-#areas = np.loadtxt('data/areas.dat')
-#trench_age = np.loadtxt('data/PuntosFosaEdad.dat')
-#rhe_data = setup.read_rheo('data/Rhe_Param.dat')
-#
-## User Input
-#t_input = setup.readVars('VarTermal.txt')
-#m_input = setup.readVars('VarMecanico.txt')
-#
-#print("After Input M.S.:")
-#mem()
-#
-## Models Generation
-#def compute_models(gm_data, areas, trench_age, rhe_data,
-#                   t_input=None, m_input=None):
-#    if t_input is not None and m_input is not None:
-#        pass
-#    else:
-#        t_input, m_input = read_user_input()
-#    models_values = compute(gm_data, areas, trench_age, rhe_data,
-#                            t_input, m_input)
-#    models_keys = ['D', 'CS', 'GM', 'TM', 'MM']
-#    models = dict(zip(models_keys, models_values))
-#    return DotDict(models)
-#
-#models = compute_models(gm_data, areas, trench_age, rhe_data, t_input, m_input)
+# Static Input
+gm_data = np.loadtxt('data/Modelo.dat')
+areas = np.loadtxt('data/areas.dat')
+trench_age = np.loadtxt('data/PuntosFosaEdad.dat')
+rhe_data = setup.read_rheo('data/Rhe_Param.dat')
+
+# User Input
+t_input = setup.readVars('VarTermal.txt')
+m_input = setup.readVars('VarMecanico.txt')
+
+print("After Input M.S.:")
+mem()
+
+# Models Generation
+def compute_models(gm_data, areas, trench_age, rhe_data,
+                   t_input=None, m_input=None):
+    if t_input is not None and m_input is not None:
+        pass
+    else:
+        t_input, m_input = read_user_input()
+    models_values = compute(gm_data, areas, trench_age, rhe_data,
+                            t_input, m_input)
+    models_keys = ['D', 'CS', 'GM', 'TM', 'MM']
+    models = dict(zip(models_keys, models_values))
+    return DotDict(models)
+
+models = compute_models(gm_data, areas, trench_age, rhe_data, t_input, m_input)
 
 print("After Models M.S.:")
 mem()
 
 # Models Wrapper Methods
-#def get_x_axis():
-#    return models.CS.get_x_axis()
-#def get_y_axis():
-#    return models.CS.get_y_axis()
-#def get_z_axis():
-#    return models.CS.get_z_axis()
-#def get_xy_step():
-#    return models.CS.get_xy_step()
-#def get_x_grid_2D():
-#    return models.CS.get_2D_grid()[0]
-#def get_y_grid_2D():
-#    return models.CS.get_2D_grid()[1]
-#def get_topo():
-#    return models.GM.get_topo().mask_irrelevant()
-#def get_icd():
-#    return models.GM.get_icd().mask_irrelevant()
-#def get_moho():
-#    return models.GM.get_moho().mask_irrelevant()
-#def get_slab_lab():
-#    return models.GM.get_slab_lab().mask_irrelevant()
-#def get_geometry():
-#    return models.GM.get_3D_geometric_model()
-#def get_geotherm():
-#    return models.TM.get_geotherm()
-#def get_tension_yse():
-#    return models.MM.get_yse()[0]
-#def get_compression_yse():
-#    return models.MM.get_yse()[1]
-#def get_surface_heat_flow():
-#    return models.TM.get_surface_heat_flow()
-#def get_effective_elastic_thickness():
-#    return models.MM.get_eet()
+def get_x_axis():
+    return models.CS.get_x_axis()
+def get_y_axis():
+    return models.CS.get_y_axis()
+def get_z_axis():
+    return models.CS.get_z_axis()
+def get_xy_step():
+    return models.CS.get_xy_step()
+def get_x_grid_2D():
+    return models.CS.get_2D_grid()[0]
+def get_y_grid_2D():
+    return models.CS.get_2D_grid()[1]
+def get_topo():
+    return models.GM.get_topo().mask_irrelevant()
+def get_icd():
+    return models.GM.get_icd().mask_irrelevant()
+def get_moho():
+    return models.GM.get_moho().mask_irrelevant()
+def get_slab_lab():
+    return models.GM.get_slab_lab().mask_irrelevant()
+def get_geometry():
+    return models.GM.get_3D_geometric_model()
+def get_geotherm():
+    return models.TM.get_geotherm()
+def get_tension_yse():
+    return models.MM.get_yse()[0]
+def get_compression_yse():
+    return models.MM.get_yse()[1]
+def get_surface_heat_flow():
+    return models.TM.get_surface_heat_flow()
+def get_effective_elastic_thickness():
+    return models.MM.get_eet()
 def map_grids():
     map_grids = {
         'None': None,
@@ -221,7 +177,7 @@ def plot_map_data(latitude, map_grid):
             'cmax': colorscale['color_limits']['max'],
             'line': {'color': 'rgba(0,0,0,0)'},
             'opacity': 1})
-    return ( 
+    return (
         [go.Scattergeo(
             lon = get_x_grid_2D().flatten(),
             lat = get_y_grid_2D().flatten(),
@@ -395,7 +351,7 @@ def cross_section_grid_options():
         for grid in list(cross_section_grids().keys())])
     return grid_options
 def map_graph_layout():
-    return ( 
+    return (
         {'title': 'Mapa',
         'autosize': False,
         'height': 800,

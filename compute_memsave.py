@@ -1119,7 +1119,7 @@ def compute(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input):
     mm_d = d.get_mm_data()
     print("#####After D vars M.S:")
     mem()
-    cs = CoordinateSystem(cs_d, 0.2, 1)
+    cs = CoordinateSystem(cs_d, 0.4, 1)
     print("#####After CS M.S:")
     mem()
     gm = GeometricModel(gm_d, cs)
