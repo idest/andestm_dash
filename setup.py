@@ -47,7 +47,7 @@ def makeDirs(temcaso, meccaso):
     if not os.path.exists('Output'):
         os.makedirs('Output')
 
-    direTer = 'Output/%s_Termal' %(temcaso)
+    direTer = 'Output/%s_Termal/' %(temcaso)
     if not os.path.exists(direTer):
         os.makedirs(direTer)
 
@@ -57,16 +57,16 @@ def makeDirs(temcaso, meccaso):
     # Generar nuevo output para el modelo Mecanico, basado un termal existente
     # El numero del caso termal (temcaso) debe ser un modelo termal ya generado
 
-    direTerMec = 'Output/%s_Termal/%s_Mecanico' %(temcaso,meccaso)
+    direMec = 'Output/%s_Termal/%s_Mecanico/' %(temcaso,meccaso)
 
-    if not os.path.exists(direTerMec):
-        os.makedirs(direTerMec)
+    if not os.path.exists(direMec):
+        os.makedirs(direMec)
 
-    shutil.copy( 'VarMecanico.txt', direTerMec )
+    shutil.copy( 'VarMecanico.txt', direMec )
 
     # Retorna los directorios creados
 
-    return direTer, direTerMec
+    return direTer, direMec
 
 def read_rheo(name):
 
