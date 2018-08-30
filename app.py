@@ -10,6 +10,10 @@ def mem():
 print("Initial M.S.:")
 mem()
 
+# Python libs
+from textwrap import dedent as d
+import json
+
 # Dash libs
 import dash
 from dash.dependencies import Input, Output
@@ -163,7 +167,7 @@ def choose_cross_section_colorscale(cross_section_grid):
         color_palette = None
         color_limits = {'min': None, 'max': None}
     return {'color_palette': color_palette, 'color_limits': color_limits}
-def plot_map_data(latitude, map_grid):
+def plot_map_data(latitude, longitude, map_grid):
     colorscale = choose_map_colorscale(map_grid)
     grid = map_grids()[map_grid]
     if map_grid == 'None':
@@ -185,14 +189,24 @@ def plot_map_data(latitude, map_grid):
             showlegend = False,
             geo = 'geo'),
         go.Scattergeo(
-            lon = [-82.5, -57.5],
-            lat = latitude,
-            mode='lines',
-            line= {'width':1, 'color':'black'},
-            showlegend = False)]
+            lon = np.linspace(-81, -59, 100),
+            lat = np.repeat(latitude, 100),
+            mode = 'lines',
+            hoverinfo = 'skip',
+            showlegend = False,
+            marker = {'color': 'black'}
+            ),
+        go.Scattergeo(
+            lon = [longitude],
+            lat = [latitude],
+            marker = {'color': 'blue'},
+            hoverinfo = 'skip',
+            showlegend = False,
+            )
+        ]
     )
 
-def plot_cross_section_data(latitude, cross_section_grid):
+def plot_cross_section_data(latitude, longitude, cross_section_grid):
     colorscale = choose_cross_section_colorscale(cross_section_grid)
     grid = cross_section_grids()[cross_section_grid]
     #index = np.where(get_y_axis() == latitude)[0][0]
@@ -213,6 +227,7 @@ def plot_cross_section_data(latitude, cross_section_grid):
             zmin = colorscale['color_limits']['min'],
             zmax = colorscale['color_limits']['max'],
             zsmooth = 'best',
+            hoverinfo='skip'
             #name = name
         )
         znan = grid.cross_section(latitude=latitude).T.copy()
@@ -225,30 +240,61 @@ def plot_cross_section_data(latitude, cross_section_grid):
         go.Scatter(
             x=get_x_axis(),
             y=get_topo().cross_section(latitude=latitude),
-            #y=get_topo()[:, index].T,
+            hoverinfo='x',
             name='topo'),
         go.Scatter(
             x=get_x_axis(),
             y=get_icd().cross_section(latitude=latitude),
-            #y=get_icd()[:, index].T,
+            hoverinfo='skip',
             name='icd'),
         go.Scatter(
             x=get_x_axis(),
             y=get_moho().cross_section(latitude=latitude),
-            #y=get_moho()[:, index].T,
+            hoverinfo='skip',
             name='moho'),
         go.Scatter(
             x=get_x_axis(),
             y=get_slab_lab().cross_section(latitude=latitude),
-            #y=get_slab_lab()[:, index].T,
+            hoverinfo='skip',
             name='slab/lab'),
+        go.Scatter(
+            x=np.repeat(longitude,100),
+            y=np.linspace(10,-180,100),
+            showlegend=False,
+            hoverinfo='skip',
+            mode='lines',
+            marker={'color':'black'}
+            ),
         go.Heatmap(
             x = get_x_axis(),
             y = get_z_axis(),
             z = znan,
             showscale = False,
-            hoverinfo = 'skip')]
+            hoverinfo = 'skip'
+            )]
     )
+
+def plot_yse_chart_data(latitude, longitude):
+    yse = get_tension_yse()
+    print(get_topo().shape)
+    print(yse.cross_section(latitude=latitude).shape)
+    print(len(yse.cross_section(latitude=latitude).cross_section(longitude=longitude)))
+    print(len(get_z_axis()))
+    return (
+            #
+            [ go.Scattergl(
+                x=yse.cross_section(latitude=latitude).cross_section(longitude=longitude),
+                y=get_z_axis(),
+                name='yse'
+                )]
+            #[go.Scatter(
+            #x=get_x_axis(),
+            #y=get_slab_lab().cross_section(latitude=latitude),
+            #name='yse'
+            #)
+            #]
+            )
+
 
 print("After Models Variables M.S.:")
 mem()
@@ -269,24 +315,28 @@ app.layout = html.Div([
 ])
 
 # Pages layouts
-def index_layout(): 
+def index_layout():
     return html.Div('Index')
 
-def maker_layout(): 
+def maker_layout():
     return html.Div('Maker')
 
 def explorer_layout():
     return html.Div([
-        'Explorer',
-        html.Div(map_layout(), 
-                 className='five columns'),
-        html.Div(cross_section_layout(), 
-                 className='seven columns')#, 
-                 #style={'marginLeft': '0'})
+        html.Div(map_layout(),
+                 className='three columns',
+                 style={'marginLeft': '40px'}),
+        html.Div(graphs_layout(),
+                 className='nine columns',
+                 style={'marginLeft': '0'}),
+        html.Div(json.dumps({'latitude': -10.}), id='latitude_state',
+                 style={'display': 'none'}),
+        html.Div(json.dumps({'longitude': -70.}), id='longitude_state',
+                 style={'display': 'none'})
     ])
 
 # Sections layouts
-def map_layout(): 
+def map_layout():
     return [
         #
         html.Div([
@@ -295,38 +345,45 @@ def map_layout():
                 id='map_grid_options',
                 options=map_grid_options(),
                 value=list(map_grid_options()[0].values())[0],
-                labelStyle={'display': 'inline-block'}
+                labelStyle={'display': 'inline-block', 'font-size': '0.8em'}
             )
-        ], className='ten columns'),
-        #
-        html.Div([
-            dcc.Slider(
-                id='latitudes',
-                max=map_maximum_latitude(),
-                min=map_minimum_latitude(),
-                marks=map_latitude_marks(),
-                value=list(map_latitude_marks().keys())[0],
-                step=map_latitude_step(),
-                vertical=True
-            ),
-        ], className='two columns', style={'height': '720', 'paddingTop': '120'})
+        ]),
     ]
 
-def cross_section_layout(): 
+def graphs_layout():
     return [
+        html.Div(cross_section_layout()),
+        html.Div(yse_chart_layout())
+    ]
+
+
+def cross_section_layout():
+    return [
+        dcc.Graph(id='cross_section', className='nine columns', style={'margin': '0'}),
+        html.Div(id='cross_section_info', className='three columns',
+            style={'border':'1px solid black',
+                'height': '400px',
+                'margin': '0',
+                'margin-left': '30'}),
         html.Div([
             dcc.RadioItems(
                 id='cross_section_grid_options',
                 options=cross_section_grid_options(),
                 value=list(cross_section_grid_options()[0].values())[0],
-                labelStyle={'display': 'inline-block'}
+                labelStyle={'display': 'inline-block', 'font-size': '0.8em'}
             )
-        ], style={'paddingLeft': 100}),
-        dcc.Graph(id='cross_section'),
+        ], style={'paddingLeft': 100}, className='twelve columns'),
     ]
 
 def yse_chart_layout():
-    return [dcc.Graph(id='yse')]
+    return [
+        dcc.Graph(id='yse', className='nine columns', style={'margin': '0'}),
+        html.Div(id='yse_info', className='three columns',
+            style={'border':'1px solid black',
+                   'height': '400px',
+                   'margin': '0',
+                   'margin-left': '30'})
+    ]
 
 # Appareance Methods
 def map_grid_options():
@@ -336,7 +393,7 @@ def map_grid_options():
     return grid_options
 def map_latitude_marks():
     latitude_marks = (
-        {int(i): '{}'.format(i) 
+        {int(i): '{}'.format(i)
         for i in get_y_axis()[::10]})
     return latitude_marks
 def map_maximum_latitude():
@@ -350,13 +407,13 @@ def cross_section_grid_options():
         [{'label': grid, 'value': grid}
         for grid in list(cross_section_grids().keys())])
     return grid_options
-def map_graph_layout():
+def map_graph_layout(latitude, longitude):
     return (
-        {'title': 'Mapa',
+        {'title': 'Map (Lat: {:.1f}, Lon: {:.1f})'.format(latitude,longitude),
         'autosize': False,
         'height': 800,
-        'width': 600,
-        'margin': {'l':0,'r':0,'t':0,'b':0,'pad':2,'autoexpand':True},
+        'width': 400,
+        'margin': {'l':0,'r':0,'t':80,'b':0,'pad':2,'autoexpand':True},
         'geo': {
             'scope': 'south america',
             'resolution': 50,
@@ -384,14 +441,27 @@ def map_graph_layout():
         }}
     )
 
-def cross_section_graph_layout():
+def cross_section_graph_layout(latitude, longitude):
     return (
-        {'legend': {'orientation':'h'},
-        'margin': {'l':0,'r':0,'t':0,'b':0,'pad':2,'autoexpand':True},
+        {
+        'title': 'Cross Section (Lat: {:.1f}, Lon: {:.1f})'
+            .format(latitude, longitude),
+        'legend': {'orientation':'h'},
+        'margin': {'t':40,'b':0},
         'xaxis': {'range': [-81.0, -59.0]},
         'yaxis': {'range': [-180.0, 10.0]}
         }
     )
+
+def yse_chart_graph_layout(latitude, longitude):
+    return (
+        {
+        'title': 'Yield Strength Envelope (Lat: {:.1f}, Lon: {:.1f})'
+            .format(latitude,longitude),
+        'margin': {'t':40}
+        }
+    )
+
   
 
 
@@ -416,24 +486,64 @@ def display_page(pathname):
 
 @app.callback(
     Output('map', 'figure'),
-    [Input('latitudes', 'value'), Input('map_grid_options', 'value')])
-def update_map(latitude, map_grid):
+    [Input('latitude_state', 'children'),
+     Input('longitude_state', 'children'),
+     Input('map_grid_options', 'value')]
+)
+def update_map(latitude_state, longitude_state, map_grid):
     print("update_map called")
-    data = plot_map_data(latitude, map_grid)
-    layout = map_graph_layout()
+    longitude = json.loads(longitude_state)['longitude']
+    latitude = json.loads(latitude_state)['latitude']
+    data = plot_map_data(latitude, longitude, map_grid)
+    layout = map_graph_layout(latitude, longitude)
     figure = {'data': data, 'layout': layout}
     return figure
 
 @app.callback(
     Output('cross_section', 'figure'),
-    [Input('latitudes', 'value'), Input('cross_section_grid_options', 'value')]
+    [Input('latitude_state', 'children'),
+     Input('longitude_state', 'children'),
+     Input('cross_section_grid_options', 'value')
+    ]
 )
-def update_cross_section(latitude, cross_section_grid):
+def update_cross_section(latitude_state, longitude_state, cross_section_grid):
     print("update_cross_section_called")
-    data = plot_cross_section_data(latitude, cross_section_grid)
-    layout = cross_section_graph_layout()
+    longitude = json.loads(longitude_state)['longitude']
+    latitude = json.loads(latitude_state)['latitude']
+    data = plot_cross_section_data(latitude, longitude, cross_section_grid)
+    layout = cross_section_graph_layout(latitude, longitude)
     figure = {'data': data, 'layout': layout}
     return figure
+@app.callback(
+    Output('yse', 'figure'),
+    [Input('latitude_state', 'children'), Input('longitude_state', 'children')]
+)
+def update_yse_chart(latitude_state, longitude_state):
+    latitude = json.loads(latitude_state)['latitude']
+    longitude = json.loads(longitude_state)['longitude']
+    data = plot_yse_chart_data(latitude, longitude)
+    layout = yse_chart_graph_layout(latitude, longitude)
+    figure = {'data': data, 'layout': layout}
+    return figure
+@app.callback(
+    Output('click-data', 'children'),
+    [Input('map', 'hoverData')])
+def display_click_data(clickData):
+    return json.dumps(clickData, indent=2)
+@app.callback(
+    Output('latitude_state', 'children'),
+    [Input('map', 'hoverData')])
+def update_latitude_state(map_hover_data):
+    latitude = map_hover_data['points'][0]['lat']
+    latitude_state = {'latitude': latitude}
+    return json.dumps(latitude_state)
+@app.callback(
+    Output('longitude_state', 'children'),
+    [Input('cross_section', 'hoverData')])
+def update_longitude_state(cross_section_hover_data):
+    longitude = cross_section_hover_data['points'][0]['x']
+    longitude_state = {'longitude': longitude}
+    return json.dumps(longitude_state)
 
 
 print("After Controller M.S.:")
