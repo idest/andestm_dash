@@ -327,8 +327,9 @@ def explorer_layout():
                  className='three columns',
                  style={'marginLeft': '40px'}),
         html.Div(graphs_layout(),
-                 className='nine columns',
+                 className='six columns',
                  style={'marginLeft': '0'}),
+        html.Div(input_layout(), className='three columns'),
         html.Div(json.dumps({'latitude': -10.}), id='latitude_state',
                  style={'display': 'none'}),
         html.Div(json.dumps({'longitude': -70.}), id='longitude_state',
@@ -336,6 +337,86 @@ def explorer_layout():
     ])
 
 # Sections layouts
+def input_layout():
+    return [
+        html.Div(thermal_input_layout(),
+            id='thermal_input',
+            style={'border': '1px solid black',
+                'height': '400px',
+                'margin': '0',
+                'margin-top': '30'}),
+        html.Div(mechanical_input_layout(),
+            id='mechanical input',
+            style={'border': '1px solid black',
+                'height': '400px',
+                'margin': '0',
+                'margin-top': '30'}),
+    ]
+
+def thermal_input_layout():
+    return html.Div([
+            dcc.Checklist(
+                options=[
+                    {'label': 'k = f(z)', 'value': 'k_z'},
+                    {'label': 'H = f(z)', 'value': 'H_z'},
+                    {'label': 'Delta = ICD', 'value': 'delta_icd'},
+                    {'label': 't = f(lat)', 'value': 't_lat'}
+                ],
+                values=['t_lat']
+                ),
+            html.Div([
+                html.Span('k upper crust'),
+                html.Div(
+                    dcc.Slider(min=1., max=5., step=0.1, value=3.),
+                    style={'display': 'inline-block', 'width': '100px'})
+                ]),
+            html.Div([
+                html.Span('k lower crust'),
+                html.Div(
+                    dcc.Slider(min=1., max=5., step=0.1, value=3.),
+                    style={'display': 'inline-block', 'width': '100px'})
+                ]),
+            html.Div([
+                html.Span('k litospheric mantle'),
+                html.Div(
+                    dcc.Slider(min=1., max=5., step=0.1, value=3.),
+                    style={'display': 'inline-block', 'width': '100px'})
+                ]),
+            html.Div([
+                html.Span('H upper crust'),
+                html.Div(
+                    dcc.Slider(min=0., max=5.e-6, step=1.e-6, value=3.e-6),
+                    style={'display': 'inline-block', 'width': '200px'})
+                ]),
+            html.Div([
+                html.Span('H lower crust'),
+                html.Div(
+                    dcc.Slider(min=0., max=5.e-6, step=1.e-7, value=3.e-6),
+                    style={'display': 'inline-block', 'width': '100px'})
+                ]),
+            html.Div([
+                html.Span('H litospheric mantle'),
+                html.Div(
+                    dcc.Slider(min=1.e-6, max=5.e-6, step=1.e-7, value=3.e-6),
+                    style={'display': 'inline-block', 'width': '100px'})
+                ]),
+            html.Div([
+                html.Span('Thermal diffusivity (kappa)'),
+                html.Div(
+                    dcc.Slider(min=0., max=3.e-6, step=1.e-7, value=1.e-6),
+                    style={'display': 'inline-block', 'width': '100px'})
+                ]),
+            html.Div([
+                html.Span('Potential mantle temperature (Tp)'),
+                html.Div(
+                    dcc.Slider(min=1000., max=1500., step=50., value=1250.),
+                    style={'display': 'inline-block', 'width': '100px'})
+                ])
+        ])
+
+def mechanical_input_layout():
+    return
+
 def map_layout():
     return [
         #
@@ -359,12 +440,7 @@ def graphs_layout():
 
 def cross_section_layout():
     return [
-        dcc.Graph(id='cross_section', className='nine columns', style={'margin': '0'}),
-        html.Div(id='cross_section_info', className='three columns',
-            style={'border':'1px solid black',
-                'height': '400px',
-                'margin': '0',
-                'margin-left': '30'}),
+        dcc.Graph(id='cross_section', style={'margin': '0'}),
         html.Div([
             dcc.RadioItems(
                 id='cross_section_grid_options',
@@ -376,14 +452,7 @@ def cross_section_layout():
     ]
 
 def yse_chart_layout():
-    return [
-        dcc.Graph(id='yse', className='nine columns', style={'margin': '0'}),
-        html.Div(id='yse_info', className='three columns',
-            style={'border':'1px solid black',
-                   'height': '400px',
-                   'margin': '0',
-                   'margin-left': '30'})
-    ]
+    return dcc.Graph(id='yse', style={'margin': '0'})
 
 # Appareance Methods
 def map_grid_options():
@@ -532,14 +601,14 @@ def display_click_data(clickData):
     return json.dumps(clickData, indent=2)
 @app.callback(
     Output('latitude_state', 'children'),
-    [Input('map', 'hoverData')])
+    [Input('map', 'clickData')])
 def update_latitude_state(map_hover_data):
     latitude = map_hover_data['points'][0]['lat']
     latitude_state = {'latitude': latitude}
     return json.dumps(latitude_state)
 @app.callback(
     Output('longitude_state', 'children'),
-    [Input('cross_section', 'hoverData')])
+    [Input('cross_section', 'clickData')])
 def update_longitude_state(cross_section_hover_data):
     longitude = cross_section_hover_data['points'][0]['x']
     longitude_state = {'longitude': longitude}
