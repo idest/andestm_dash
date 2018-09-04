@@ -347,14 +347,14 @@ def input_layout():
         html.Div(thermal_input_layout(),
             id='thermal_input',
             style={'border': '1px solid black',
-                'height': '470px',
+                'height': '500px',
                 'margin': '0',
                 'margin-top': '30',
                 'overflow': 'scroll'}),
         html.Div(mechanical_input_layout(),
             id='mechanical input',
             style={'border': '1px solid black',
-                'height': '330px',
+                'height': '300px',
                 'margin': '0',
                 'margin-top': '30'}),
     ]
@@ -374,196 +374,106 @@ def thermal_input_layout():
                 html.Span('k_uc',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=1., max=5., step=0.1, value=3.),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='k_uc_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('k_lc',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=1., max=5., step=0.1, value=3.),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='k_lc_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('k_lm',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=1., max=5., step=0.1, value=3.),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='k_lm_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('H_uc',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=0., max=5.e-6, step=1.e-7, value=3.e-6),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='H_uc_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('H_lc',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=0., max=5.e-6, step=1.e-7, value=3.e-6),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='H_lc_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('H_lm',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=1.e-6, max=5.e-6, step=1.e-7, value=3.e-6),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='H_lm_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('κ',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=0., max=3.e-6, step=1.e-7, value=1.e-6),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='kappa_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('Tp',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=1000., max=1500., step=50., value=1250.),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='Tp_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('G',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=1.e-4, max=1.e-3, step=1.e-4, value=4.e-4),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='G_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('V',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=1.e4, max=1.e5, step=5.e3, value=6.5e4),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='V_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('b',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=1., max=5., step=1., value=1.),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='b_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('α',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=0., max=45., step=5., value=20.),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='alpha_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('D',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=1.e-3, max=1.e-2, step=1.e-3, value=1.e-3),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='D_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('δ',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=0., max=30., step=5., value=10.),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='delta_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
             html.Div([
                 html.Span('t',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
                     idc.Slider(min=0., max=50., step=5., value=30.),
-                    style={'display': 'inline-block', 'width': '100px',
-                        'margin-left': 20}),
-                html.Div(id='t_output',
-                    style={'display':'inline-block',
-                        'width': '25px',
-                        'height': '20px',
-                        'margin-left': 20,
-                        'border':'1px solid black'})
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
                 ]),
         ], style={'padding-left':'10'})
 
@@ -633,8 +543,8 @@ def map_graph_layout(latitude, longitude):
     return (
         {'title': 'Map (Lat: {:.1f}, Lon: {:.1f})'.format(latitude,longitude),
         'autosize': False,
-        'height': 600,
-        'width': 300,
+        'height': 800,
+        'width': 400,
         'margin': {'l':0,'r':0,'t':80,'b':0,'pad':2,'autoexpand':True},
         'geo': {
             'scope': 'south america',
