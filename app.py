@@ -55,6 +55,8 @@ gm_data = np.loadtxt('data/Modelo.dat')
 areas = np.loadtxt('data/areas.dat')
 trench_age = np.loadtxt('data/PuntosFosaEdad.dat')
 rhe_data = setup.read_rheo('data/Rhe_Param.dat')
+print(rhe_data)
+print(rhe_data.keys())
 
 # User Input
 t_input = setup.readVars('VarTermal.txt')
@@ -177,7 +179,7 @@ def plot_map_data(latitude, longitude, map_grid):
         marker = (
             {'color': grid.flatten(),
             'colorscale': colorscale['color_palette'],
-            'colorbar': {},
+            'colorbar': {'title':''},
             'cmin': colorscale['color_limits']['min'],
             'cmax': colorscale['color_limits']['max'],
             'line': {'color': 'rgba(0,0,0,0)'},
@@ -478,7 +480,76 @@ def thermal_input_layout():
         ], style={'padding-left':'10'})
 
 def mechanical_input_layout():
-    return
+    return html.Div([
+            html.Div([
+                html.Span('Bs_t',style={'display':'inline-block', 'width':'30px'}),
+                html.Div(
+                    idc.Slider(min=0., max=100.e3, step=5.e3, value=20.e3),
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
+                ]),
+            html.Div([
+                html.Span('Bs_c',style={'display':'inline-block', 'width':'30px'}),
+                html.Div(
+                    idc.Slider(min=-100.e3, max=0., step=5.e3, value=-55.e3),
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
+                ]),
+            html.Div([
+                html.Span('e',style={'display':'inline-block', 'width':'30px'}),
+                html.Div(
+                    idc.Slider(min=0., max=1.e-14, step=5.e-16, value=1.e-15),
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
+                ]),
+            html.Div([
+                html.Span('R',style={'display':'inline-block', 'width':'30px'}),
+                html.Div(
+                    idc.Slider(min=0., max=10., step=1.e-2, value=8.31),
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
+                ]),
+            html.Div([
+                html.Span('uc', style={'display':'inline-block', 'width':'30px'}),
+                html.Div(
+                    dcc.Dropdown(
+                        options=[{'label':rhe_data[key]['name'],'value':key}
+                            for key in rhe_data.keys()],
+                        value='9'),
+                    style={'display':'inline-block', 'width':'300px',
+                        'margin-left': 20}
+                )
+            ]),
+            html.Div([
+                html.Span('lc', style={'display':'inline-block', 'width':'30px'}),
+                html.Div(
+                    dcc.Dropdown(
+                        options=[{'label':rhe_data[key]['name'],'value':key}
+                            for key in rhe_data.keys()],
+                        value='28'),
+                    style={'display':'inline-block', 'width':'300px',
+                        'margin-left': 20}
+                )
+            ]),
+            html.Div([
+                html.Span('lm', style={'display':'inline-block', 'width':'30px'}),
+                html.Div(
+                    dcc.Dropdown(
+                        options=[{'label':rhe_data[key]['name'],'value':key}
+                            for key in rhe_data.keys()],
+                        value='22'),
+                    style={'display':'inline-block', 'width':'300px',
+                        'margin-left': 20}
+                )
+            ]),
+            html.Div([
+                html.Span('s_max',style={'display':'inline-block', 'width':'30px'}),
+                html.Div(
+                    idc.Slider(min=0., max=1000., step=1.e2, value=2.e2),
+                    style={'display': 'inline-block', 'width': '300px',
+                        'margin-left': 20})
+                ])
+        ], style={'padding-left':'10'})
 
 def map_layout():
     return [
