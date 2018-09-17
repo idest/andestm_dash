@@ -1,6 +1,7 @@
 import math
 import numpy as np
-from dotmap import DotMap
+#from dotmap import DotMap
+from box import Box
 
 
 class Data(object):
@@ -49,7 +50,7 @@ class Data(object):
             'max_z': max_z,
             'min_z': min_z
         }
-        return DotMap(coordinate_data)
+        return Box(coordinate_data)
 
     def __set_geometric_data(self, initial_data):
         z_slab_lab = initial_data[:, 2]
@@ -62,7 +63,7 @@ class Data(object):
             'z_icd': z_icd,
             'z_topo': z_topo
         }
-        return DotMap(geometric_data)
+        return Box(geometric_data)
 
     def get_cs_data(self):
         cs_data = {
@@ -70,28 +71,28 @@ class Data(object):
             'populated_points': self.populated_points,
             'z_slab_lab': self.geometric_data.z_slab_lab  # to get plates_areas
         }
-        return DotMap(cs_data)
+        return Box(cs_data)
 
     def get_gm_data(self):
         gm_data = {
             'geometric_data': self.geometric_data,
             'slab_lab_areas': self.slab_lab_areas
         }
-        return DotMap(gm_data)
+        return Box(gm_data)
 
     def get_tm_data(self):
         tm_data = {
             't_input': self.t_input,
             'trench_age': self.trench_age
         }
-        return DotMap(tm_data)
+        return Box(tm_data)
 
     def get_mm_data(self):
         mm_data = {
             'm_input': self.m_input,
             'rheologic_data': self.rheologic_data
         }
-        return DotMap(mm_data)
+        return Box(mm_data)
 
 class CoordinateSystem(object):
 
@@ -637,7 +638,7 @@ class ThermalModel(object):
     def __init__(self, tm_data, geometric_model, coordinate_system):
         self.geo_model = geometric_model
         self.cs = coordinate_system
-        self.vars = DotMap(self.__set_variables(tm_data.t_input,
+        self.vars = Box(self.__set_variables(tm_data.t_input,
                                                  tm_data.trench_age))
         self.slab_lab_temp = self.__set_slab_lab_temp()
         self.surface_heat_flow = self.__set_surface_heat_flow()
@@ -687,7 +688,7 @@ class ThermalModel(object):
         return trench_age
 
     def __set_variables(self, t_input, trench_age):
-        t_input = DotMap(t_input)
+        t_input = Box(t_input)
         # TODO: find a way to save memory by not storing 3D arrays as k and h
         t_vars = {
             'k_cs': t_input['k_cs'],
@@ -879,14 +880,14 @@ class MechanicModel(object):
                         + detached_ths[:, :, 2]**3)**(1/3)
         return detached_eet
 
-    def __init__(self, mm_data, geo_model, thermal_model, coordinate_system):
+    def __init__(self, mm_data, geo_model, geotherm, coordinate_system):
         self.geo_model = geo_model
         self.cs = coordinate_system
-        self.thermal_model = thermal_model
-        self.vars = DotMap(self.__set_variables(mm_data.m_input,
+        self.geotherm = geotherm
+        self.vars = Box(self.__set_variables(mm_data.m_input,
                                                  mm_data.rheologic_data))
         self.yse_t, self.yse_c = self.__set_yield_strength_envelope()
-        self.eet = self.__set_eet(self.yse_t)
+        self.eet, self.eet_calc_data = self.__set_eet(self.yse_t)
 
     def __get_rheologic_vars_from_model(self, rock_id):
         rock = RheologicModel.objects.get(name=rock_id)
@@ -895,7 +896,7 @@ class MechanicModel(object):
             'a': rock.A,
             'h': rock.H,
         }
-        return DotMap(rock_dic)
+        return Box(rock_dic)
 
     def __get_rheologic_vars(self, id_rh, rhe_data):
         rock = rhe_data[str(id_rh)]
@@ -904,10 +905,10 @@ class MechanicModel(object):
             'n': rock.n,
             'a': rock.A
         }
-        return DotMap(rock_dic)
+        return Box(rock_dic)
 
     def __set_variables(self, m_input, rhe_data):
-        m_input = DotMap(m_input)
+        m_input = Box(m_input)
         m_vars = {
             'bs_t': m_input['Bs_t'],
             'bs_c': m_input['Bs_c'],
@@ -942,7 +943,7 @@ class MechanicModel(object):
     def __get_ductile_yield_strength(self):
         e = self.vars.e
         r = self.vars.r
-        temp = self.thermal_model.get_geotherm()
+        temp = self.geotherm
         cs = self.vars.cs
         ci = self.vars.ci
         ml = self.vars.ml
@@ -959,7 +960,7 @@ class MechanicModel(object):
         dys = self.__get_ductile_yield_strength()  # type: np.ndarray
         with np.errstate(invalid='ignore'):
             yse_t = np.where(bys_t < dys, bys_t, dys)
-            yse_c = np.where(bys_c > dys, bys_c, dys)
+            yse_c = np.where(bys_c > -dys, bys_c, -dys)
         return yse_t, yse_c
 
     def __get_layer_elastic_tuple(self, elastic_z, layer):
@@ -990,6 +991,7 @@ class MechanicModel(object):
         elastic_z = self.__get_depth_from_topo().copy()
         with np.errstate(invalid='ignore'):
             elastic_z[yse < self.vars.s_max] = np.nan
+        elastic_z[np.isnan(yse)] = np.nan
         uc_tuple, e_z_uc = self.__get_layer_elastic_tuple(elastic_z, 'uc')
         lc_tuple, e_z_lc = self.__get_layer_elastic_tuple(elastic_z, 'lc')
         lm_tuple, e_z_lm = self.__get_layer_elastic_tuple(elastic_z, 'lm')
@@ -1008,8 +1010,14 @@ class MechanicModel(object):
         attached_eet = self.__calc_eet_attached(attached_ths)
         detached_eet = self.__calc_eet_detached(detached_ths)
         eet = SpatialArray.combine_arrays_by_areas(attached_eet, detached_eet, share_moho)
-
-        return eet
+        eet_calc_data = {
+            'uc_tuple': uc_tuple,
+            'lc_tuple': lc_tuple,
+            'lm_tuple': lm_tuple,
+            'share_icd': share_icd,
+            'share_moho': share_moho
+        }
+        return eet, eet_calc_data
 
     def get_yse(self):
         return (SpatialArray3D(self.yse_t, self.cs),
@@ -1017,6 +1025,9 @@ class MechanicModel(object):
 
     def get_eet(self):
         return SpatialArray2D(self.eet, self.cs)
+
+    def get_eet_calc_data(self):
+        return self.eet_calc_data
 
     def get_geometric_model(self):
         return self.geo_model
@@ -1034,7 +1045,29 @@ def compute(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input):
     cs = CoordinateSystem(cs_d, 0.2, 1)
     gm = GeometricModel(gm_d, cs)
     tm = ThermalModel(tm_d, gm, cs)
-    mm = MechanicModel(mm_d, gm, tm, cs)
+    mm = MechanicModel(mm_d, gm, tm.get_geotherm(), cs)
     return d, cs, gm, tm, mm
 
+def compute_data(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input):
+    d = Data(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input)
+    cs_d = d.get_cs_data()
+    gm_d = d.get_gm_data()
+    tm_d = d.get_tm_data()
+    mm_d = d.get_mm_data()
+    return cs_d, gm_d, tm_d, mm_d 
 
+def compute_cs(cs_d):
+    cs = CoordinateSystem(cs_d, 0.2, 1)
+    return cs
+
+def compute_gm(gm_d, cs):
+    gm = GeometricModel(gm_d, cs)
+    return gm
+
+def compute_tm(tm_d, gm, cs):
+    tm = ThermalModel(tm_d, gm, cs)
+    return tm
+
+def compute_mm(mm_d, gm, geotherm, cs):
+    mm = MechanicModel(mm_d, gm, geotherm, cs)
+    return mm
