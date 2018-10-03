@@ -421,18 +421,20 @@ def plot_yse_chart_data(latitude, longitude, yse_t, yse_c, eet_calc_data, s_max)
     lc_tuple = eet_calc_data['lc_tuple'][index_lon, index_lat]
     lm_tuple = eet_calc_data['lm_tuple'][index_lon, index_lat]
     topo = get_topo()[index_lon, index_lat]
-    uc_elastic_top= -uc_tuple[0]+topo
-    uc_elastic_bottom = -uc_tuple[1]+topo
+    uc_elastic_top= -uc_tuple[0]
+    uc_elastic_bottom = -uc_tuple[1]
     uc_elastic_thickness = uc_tuple[2]
-    lc_elastic_top = -lc_tuple[0]+topo
-    lc_elastic_bottom =  -lc_tuple[1]+topo
+    lc_elastic_top = -lc_tuple[0]
+    lc_elastic_bottom =  -lc_tuple[1]
     lc_elastic_thickness = lc_tuple[2]
-    lm_elastic_top = -lm_tuple[0]+topo
-    lm_elastic_bottom =  -lm_tuple[1]+topo
+    lm_elastic_top = -lm_tuple[0]
+    lm_elastic_bottom =  -lm_tuple[1]
     lm_elastic_thickness = lm_tuple[2]
+    print('lat_index', index_lat, 'lon_index', index_lon)
     print('uc', uc_elastic_top, uc_elastic_bottom)
     print('lc', lc_elastic_top, lc_elastic_bottom)
     print('lm', lm_elastic_top, lm_elastic_bottom)
+    print('eet', eet_calc_data['eet'][index_lon,index_lat])
     boundaries = get_boundaries()
     layers = get_layers()
     plots=[]
