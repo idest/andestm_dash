@@ -8,12 +8,12 @@ class Data(object):
 
     @staticmethod
     def __get_max(values):
-        max_v = math.ceil(np.nanmax(values))
+        max_v = np.nanmax(values)
         return max_v
 
     @staticmethod
     def __get_min(values):
-        min_v = math.floor(np.nanmin(values))
+        min_v = np.nanmin(values)
         return min_v
 
     def __init__(self, initial_data, slab_lab_areas, trench_age, rheologic_data,
@@ -69,7 +69,8 @@ class Data(object):
         cs_data = {
             'coordinate_data': self.coordinate_data,
             'populated_points': self.populated_points,
-            'z_slab_lab': self.geometric_data.z_slab_lab  # to get plates_areas
+            'z_slab_lab': self.geometric_data.z_slab_lab,  # to get plates_areas
+            'z_topo': self.geometric_data.z_topo # to get relevant area
         }
         return Box(cs_data)
 
@@ -96,41 +97,57 @@ class Data(object):
 
 class CoordinateSystem(object):
 
-    def __init__(self, cs_data, xy_step, z_step):
+    @staticmethod
+    def round_to_step(x, step=1, prec=0):
+        return (step * (np.array(x) / step).round()).round(prec)
+
+    def __init__(self, cs_data, xy_step, z_step, z_precision=0):
         self.data = cs_data.coordinate_data
+        self.z_topo_not_rounded = cs_data.z_topo
+        self.z_slab_lab_not_rounded = cs_data.z_slab_lab
         self.xy_step = xy_step
         self.z_step = z_step
+        self.z_precision = z_precision
         self.x_axis = self.__set_axis(self.data.max_lon, self.data.min_lon,
                                       self.xy_step)
         self.y_axis = self.__set_axis(self.data.max_lat, self.data.min_lat,
                                       self.xy_step, revert=True)
         self.z_axis = self.__set_axis(self.data.max_z, self.data.min_z,
-                                      self.z_step, revert=True)
+                                      self.z_step, revert=True,
+                                      precision=z_precision)
         self.grid_2D = self.__set_grid([self.x_axis, self.y_axis])
         self.grid_3D = self.__set_grid([self.x_axis, self.y_axis, self.z_axis])
         self.populated_points = cs_data.populated_points
-        self.plates_areas = self.__set_plates_areas(cs_data.z_slab_lab)
+        self.plates_areas = self.__set_plates_areas()
         self.relevant_area = self.__set_relevant_area(self.populated_points,
                                                       self.plates_areas)
         self.relevant_volume = self.__set_relevant_volume(self.relevant_area)
 
-    def __set_axis(self, max_v, min_v, step, revert=False):
+    def __set_axis(self, max_v, min_v, step, revert=False, precision=None):
+        if precision is not None:
+            max_v = self.round_to_step(max_v, step=step, prec=precision)
+            min_v = self.round_to_step(min_v, step=step, prec=precision)
+        else:
+            max_v = np.ceil(max_v)
+            min_v = np.floor(min_v)
         if revert is True:
             first_v, last_v = max_v, min_v
         else:
             first_v, last_v = min_v, max_v
-
-        return np.linspace(first_v, last_v,
-                           num=(abs(last_v-first_v))/step+1,
+        axis = np.linspace(first_v, last_v,
+                           num=int(round((abs(last_v-first_v))/step+1)),
                            endpoint=True)
+        if precision is not None:
+            axis = self.round_to_step(axis, step=step, prec=precision)
+        return axis
 
     def __set_grid(self, axes, mask=False):
         grid = np.meshgrid(*[n for n in axes], indexing='ij')
         return grid
 
-    def __set_plates_areas(self, z_slab_lab):
+    def __set_plates_areas(self):
         """False (0) in Nazca Plate, True (1) in South American Plate"""
-        slab_lab = self.reshape_data(z_slab_lab)
+        slab_lab = self.reshape_data(self.z_slab_lab_not_rounded)
         g = np.gradient(slab_lab, axis=0)
         with np.errstate(invalid='ignore'):  # error_ignore
             high_g = np.absolute(g) > 1  # type: np.ndarray
@@ -151,6 +168,10 @@ class CoordinateSystem(object):
         relevant_volume = np.zeros(self.get_3D_shape(), dtype=bool)
         relevant_volume[:, :, :] = relevant_area[:, :, np.newaxis]
         return relevant_volume
+
+    def round_depth_data(self, data):
+        data = self.round_to_step(data, step=self.z_step, prec=self.z_precision)
+        return data
 
     def reshape_data(self, data_column):
         return data_column.T.reshape(len(self.y_axis), len(self.x_axis)).T
@@ -308,6 +329,7 @@ class SpatialArray2D(SpatialArray):
 
     def mask_irrelevant(self, nan_fill=False):
         mask = np.invert(self.cs.get_relevant_area())
+        # TODO: figure out if this .copy() is necessary
         masked_array = self.copy()
         masked_array[mask] = np.nan
         #masked_array = np.ma.array(self, mask=mask)
@@ -357,6 +379,7 @@ class SpatialArray3D(SpatialArray):
 
     def mask_irrelevant(self, nan_fill=True):
         mask = np.invert(self.cs.get_relevant_volume())
+        # TODO: figure out if this .copy() is necessary
         masked_array = self.copy()
         masked_array[mask] = np.nan
         #masked_array = np.ma.array(self, mask=mask)
@@ -365,9 +388,10 @@ class SpatialArray3D(SpatialArray):
         return masked_array
 
     def extract_surface(self, z_2D):
-        z_2D = np.ceil(z_2D)
+        z_2D = z_2D
         z_3D = self.cs.get_3D_grid()[2]
-        a = z_3D != z_2D[:, :, np.newaxis]
+        # round to step to fix any floating precision errors
+        a = z_3D != self.cs.round_depth_data(z_2D[:, :, np.newaxis])
         array_3D = self.copy()
         array_3D[a] = 0
         surface = np.sum(array_3D, axis=2)
@@ -383,11 +407,13 @@ class SpatialArray3D(SpatialArray):
         if isinstance(top_z, str):
             top_z = np.inf
         else:
-            top_z = np.ceil(top_z)[:, :, np.newaxis]
+            # round to step to fix any floating precision errors
+            top_z = self.cs.round_depth_data(top_z[:, :, np.newaxis])
         if isinstance(bottom_z, str):
             bottom_z = -np.inf
         else:
-            bottom_z = np.ceil(bottom_z)[:, :, np.newaxis]
+            # round to step to fix any floating precision errors
+            bottom_z = self.cs.round_depth_data(bottom_z[:, :, np.newaxis])
         with np.errstate(invalid='ignore'): # error_ignore
             a = top_z < z_3D
             b = bottom_z >= z_3D
@@ -462,14 +488,16 @@ class GeometricModel(object):
         self.slab_lab_int_topo = self.__set_slab_lab_int_topo()
 
     def __set_boundary(self, geometric_data):
-        return SpatialArray2D(self.cs.reshape_data(geometric_data), self.cs)
+        return SpatialArray2D(
+            self.cs.reshape_data(self.cs.round_depth_data(geometric_data)),
+            self.cs)
 
     def __set_3D_geometric_model(self):
         boundaries = self.get_boundaries()
         z = self.cs.get_3D_grid()[2]
         geo_model_3D = np.empty(z.shape)*np.nan
         for n in range(len(boundaries)):
-            c = np.ceil(boundaries[n][:, :, np.newaxis])
+            c = boundaries[n][:, :, np.newaxis]
             if n < (len(boundaries)-1):
                 a = n + 1
             else:
@@ -483,7 +511,8 @@ class GeometricModel(object):
 
     def __set_slab_lab_int_index(self):
         # Slab/Lab gradients array
-        g = np.gradient(self.slab_lab, axis=0)
+        g = np.gradient(
+            self.cs.reshape_data(self.cs.z_slab_lab_not_rounded), axis=0)
         # Min gradient Indexes
         min_g_idx = np.nanargmin(np.ma.masked_invalid(g), axis=0)
         # Positive gradient boolean array (True where gradient > 0 ...)
@@ -504,6 +533,7 @@ class GeometricModel(object):
     def __set_slab_lab_int_index_from_areas(self):
         sli_idx = np.argmax(self.slab_lab_areas, axis=1)
         # sli_idx = sli_idx - 1
+        # TODO: Check what is this next line for?
         sli_idx[-1] = 0
         return sli_idx
 
@@ -523,7 +553,10 @@ class GeometricModel(object):
         sli_idx = self.slab_lab_int_index
         i_idx = self.cs.get_2D_indexes()[0]
         sli_area = np.zeros(self.cs.get_2D_shape())
+        # TODO: this moves sli_area 1 index to the right compared with areas.dat
+        # is it necessary?
         sli_area[i_idx > sli_idx] = 1
+        # TODO: Is sli_ara a typo? It is not returned.
         sli_ara = np.asarray(sli_area, dtype=bool)
         if save == True:
             # Agregar latitudes en la primera columna:
@@ -674,6 +707,8 @@ class ThermalModel(object):
             n = 0
             while n < len(boundaries)-1:
                 h.append(boundaries[n] - boundaries[n+1])
+                # Erase negative values due to data errors (e.g. z_moho < z_sl)
+                h[n][h[n] < 0] = 0
                 rh.append(prop_v[n]*h[n])
                 n += 1
             r = (sum(rh) / sum(h))[:, :, np.newaxis]
@@ -739,7 +774,7 @@ class ThermalModel(object):
         b = self.vars.b
         sli_s = self.__calc_s(sli_depth, sli_topo, kappa, v, dip, b)
         z_sl = self.geo_model.get_slab_lab()
-        slab_k = self.vars.k.extract_surface(z_sl+1)
+        slab_k = self.vars.k.extract_surface(z_sl+self.cs.z_step)
         sli_idx = self.geo_model.get_slab_lab_int_index()
         j_idx = self.cs.get_2D_indexes()[1][0]
         sli_k = slab_k[sli_idx, j_idx]
@@ -768,7 +803,7 @@ class ThermalModel(object):
     def __get_slab_temp(self):
         z_sl = self.geo_model.get_slab_lab()
         z_topo = self.geo_model.get_topo()
-        slab_k = self.vars.k.extract_surface(z_sl+1)
+        slab_k = self.vars.k.extract_surface(z_sl + self.cs.z_step)
         tp = self.vars.tp
         kappa = self.vars.kappa
         v = self.vars.v
@@ -811,8 +846,8 @@ class ThermalModel(object):
         delta = self.vars.delta
         z_topo = self.geo_model.get_topo()
         z_sl = self.geo_model.get_slab_lab()
-        #slab_lab_k = self.vars.k.extract_surface(z_sl+1)
-        #slab_lab_h = self.vars.h.extract_surface(z_sl+1)
+        #slab_lab_k = self.vars.k.extract_surface(z_sl+self.cs.z_step)
+        #slab_lab_h = self.vars.h.extract_surface(z_sl+self.cs.z_step)
         topo_k = self.vars.k.extract_surface(z_topo-1)
         topo_h = self.vars.h.extract_surface(z_topo-1)
         temp_sl = self.slab_lab_temp
@@ -858,22 +893,32 @@ class MechanicModel(object):
 
     @staticmethod
     def __calc_ductile_yield_strength(es, n, a, h, r, temp):
-        #with np.errstate(over='ignore'):
-        #    dys = (es/a)**(1/n)*np.exp(h/(n*r*(temp+273.15)))*1.e-6
-        #return dys
-        result = np.empty(temp.shape)
-        stored_value = np.empty(temp.shape)
-        np.add(temp, 273.15, result)
-        np.multiply(r, result, result)
-        np.multiply(n, result, result)
-        np.divide(h, result, result)
-        np.exp(result, result)
-        np.multiply(1.e-6, result, stored_value)
-        np.divide(es, a, result)
         with np.errstate(over='ignore'):
-            np.power(result, (1/n), result)
-        np.multiply(result, stored_value,result)
-        return result
+            dys = (es/a)**(1/n)*np.exp(h/(n*r*(temp+273.15)))*1.e-6
+        #result = np.empty(temp.shape)
+        #stored_value = np.empty(temp.shape)
+        #np.add(temp, 273.15, result)
+        #np.multiply(r, result, result)
+        #np.multiply(n, result, result)
+        #np.divide(h, result, result)
+        #np.exp(result, result)
+        #np.multiply(1.e-6, result, stored_value)
+        #np.divide(es, a, result)
+        #with np.errstate(over='ignore'):
+        #    np.power(result, (1/n), result)
+        #np.multiply(result, stored_value,result)
+        #return result
+        return dys
+
+    @staticmethod
+    def __calc_depth_from_brittle_yield_strength(bs, bys):
+        depth = bys/(bs*1.e3*1.e-6)
+        return depth
+
+    @staticmethod
+    def __calc_temperature_from_ductile_yield_strength(es, n, a, h, r, dys):
+        temp = 1/(np.log(dys/(((es/a)**(1/n))*1.e-6))*((n*r)/h))
+        return temp - 273.15
 
     @staticmethod
     def __calc_eet_attached(attached_ths):
@@ -899,7 +944,8 @@ class MechanicModel(object):
                                                  mm_data.rheologic_data))
         self.depth_from_topo = self.__get_depth_from_topo()
         self.yse_t, self.yse_c = self.__set_yield_strength_envelope()
-        self.eet, self.eet_calc_data = self.__set_eet(self.yse_t)
+        #self.eet, self.eet_calc_data = self.__set_eet(self.yse_t)
+        self.eet, self.eet_calc_data = self.__set_eet_2()
 
     def __get_rheologic_vars_from_model(self, rock_id):
         rock = RheologicModel.objects.get(name=rock_id)
@@ -935,7 +981,7 @@ class MechanicModel(object):
 
     def __get_depth_from_topo(self):
         depth_from_topo = -(self.cs.get_3D_grid()[2]
-                            - np.ceil(self.geo_model.get_topo()[:, :, np.newaxis]))
+                            - self.geo_model.get_topo()[:, :, np.newaxis])
         return depth_from_topo
 
     def __get_brittle_yield_strength(self):
@@ -1009,8 +1055,8 @@ class MechanicModel(object):
         uc_tuple, e_z_uc = self.__get_layer_elastic_tuple(elastic_z, 'uc')
         lc_tuple, e_z_lc = self.__get_layer_elastic_tuple(elastic_z, 'lc')
         lm_tuple, e_z_lm = self.__get_layer_elastic_tuple(elastic_z, 'lm')
-        share_icd = uc_tuple[:, :, 1] + 1 == lc_tuple[:, :, 0]
-        share_moho = lc_tuple[:, :, 1] + 1 == lm_tuple[:, :, 0]
+        share_icd = uc_tuple[:, :, 1] + self.cs.z_step == lc_tuple[:, :, 0]
+        share_moho = lc_tuple[:, :, 1] + self.cs.z_step == lm_tuple[:, :, 0]
         elastic_thickness = np.stack((uc_tuple[:, :, 2],
                                       lc_tuple[:, :, 2],
                                       lm_tuple[:, :, 2]),
@@ -1031,6 +1077,92 @@ class MechanicModel(object):
             'share_icd': share_icd,
             'share_moho': share_moho,
             'eet': np.asarray(eet) 
+        }
+        return eet, eet_calc_data
+
+    def get_layer_elastic_tuple(self, bys_depth, dys_depth, layer):
+        if layer == 'uc':
+            top_boundary = self.geo_model.get_topo()
+            bottom_boundary = self.geo_model.get_icd()
+        elif layer == 'lc':
+            top_boundary = self.geo_model.get_icd()
+            bottom_boundary = self.geo_model.get_moho()
+        elif layer == 'lm':
+            top_boundary = self.geo_model.get_moho()
+            bottom_boundary = self.geo_model.get_slab_lab()
+        top_elastic = np.minimum(top_boundary, bys_depth)
+        bottom_elastic = np.maximum(bottom_boundary, dys_depth)
+        thickness = top_elastic - bottom_elastic
+        top_elastic[thickness < 0] = np.nan
+        bottom_elastic[thickness < 0] = np.nan
+        thickness[thickness < 0] = 0
+        return np.stack((top_elastic, bottom_elastic, thickness), axis=2)
+
+    def __set_eet_2(self):
+        # Get depth at which bys reaches 200
+        bs_t = self.vars.bs_t
+        bs_c = self.vars.bs_c
+        bys_depth_t = self.__calc_depth_from_brittle_yield_strength(bs_t, 200)
+        bys_depth_c = self.__calc_depth_from_brittle_yield_strength(bs_c, -200)
+        bys_depth_t = self.geo_model.get_topo() - bys_depth_t
+        bys_depth_c = self.geo_model.get_topo() - bys_depth_c
+        # Get temperature at which dys reaches 200
+        e = self.vars.e
+        r = self.vars.r
+        uc = self.vars.cs
+        lc = self.vars.ci
+        lm = self.vars.ml
+        temp_uc = self.__calc_temperature_from_ductile_yield_strength(
+            e, uc.n, uc.a, uc.h, r, 200)
+        temp_lc = self.__calc_temperature_from_ductile_yield_strength(
+            e, lc.n, lc.a, lc.h, r, 200)
+        temp_lm = self.__calc_temperature_from_ductile_yield_strength(
+            e, lm.n, lm.a, lm.h, r, 200)
+        #dys_temp = np.array([temp_uc, temp_lc, temp_lm])
+        idxs = SpatialArray3D(self.cs.get_3D_indexes()[2], self.cs)
+        idxs = idxs.astype(np.float).mask_irrelevant()
+        top_idx = np.nan_to_num(idxs.extract_surface(self.geo_model.get_topo()))
+        top_idx = top_idx.astype(int)
+        bottom_idx = np.nan_to_num(idxs.extract_surface(self.geo_model.get_slab_lab()))
+        bottom_idx = bottom_idx.astype(int)
+        depth = self.cs.get_3D_grid()[2]
+        geotherm = self.geotherm
+        dys_depth = np.empty((*self.cs.get_2D_shape(),3))
+        print(dys_depth.shape)
+        dys_depth[:,:] = np.nan
+        for i in np.arange(idxs.shape[0]):
+            for j in np.arange(idxs.shape[1]):
+                if np.isnan(idxs[i,j,0]) == False and top_idx[i,j] < bottom_idx[i,j]:
+                    dys_depth[i,j,:] = np.interp(np.array([temp_uc, temp_lc, temp_lm]),
+                        geotherm[i,j,top_idx[i,j]:bottom_idx[i,j]],
+                        depth[i,j,top_idx[i,j]:bottom_idx[i,j]],
+                        left=np.inf, right=-np.inf)
+        uc_tuple = self.get_layer_elastic_tuple(bys_depth_t, dys_depth[:,:,0], 'uc')
+        lc_tuple = self.get_layer_elastic_tuple(bys_depth_t, dys_depth[:,:,1], 'lc')
+        lm_tuple = self.get_layer_elastic_tuple(bys_depth_t, dys_depth[:,:,2], 'lm')
+        share_moho = lc_tuple[:, :, 1] == lm_tuple[:, :, 0]
+        share_icd = uc_tuple[:, :, 1] == lc_tuple[:, :, 0]
+        layers_thickness = np.stack(
+            (uc_tuple[:,:,2], lc_tuple[:,:,2], lm_tuple[:,:,2]), axis=2)
+        coupled_ths, decoupled_ths = SpatialArray.divide_array_by_areas(
+            layers_thickness, share_moho)
+        decoupled_ths_2l, decoupled_ths_3l = SpatialArray.divide_array_by_areas(
+            decoupled_ths, share_icd)
+        decoupled_ths_2l[:,:,1] = decoupled_ths_2l[:,:,0] + decoupled_ths_2l[:,:,1]
+        decoupled_ths_2l[:,:,0] = np.nan
+        dcoupled_ths = SpatialArray.combine_arrays_by_areas(
+            decoupled_ths_2l, decoupled_ths_3l, share_icd)
+        eet_coupled = self.__calc_eet_attached(coupled_ths)
+        eet_decoupled = self.__calc_eet_detached(decoupled_ths)
+        eet = SpatialArray.combine_arrays_by_areas(
+            eet_coupled, eet_decoupled, share_moho)
+        eet_calc_data = {
+            'uc_tuple': uc_tuple,
+            'lc_tuple': lc_tuple,
+            'lm_tuple': lm_tuple,
+            'share_icd': SpatialArray2D(share_icd, self.cs),
+            'share_moho': SpatialArray2D(share_moho, self.cs),
+            'eet': np.asarray(eet)
         }
         return eet, eet_calc_data
 

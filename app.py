@@ -421,14 +421,14 @@ def plot_yse_chart_data(latitude, longitude, yse_t, yse_c, eet_calc_data, s_max)
     lc_tuple = eet_calc_data['lc_tuple'][index_lon, index_lat]
     lm_tuple = eet_calc_data['lm_tuple'][index_lon, index_lat]
     topo = get_topo()[index_lon, index_lat]
-    uc_elastic_top= -uc_tuple[0]
-    uc_elastic_bottom = -uc_tuple[1]
+    uc_elastic_top= uc_tuple[0]
+    uc_elastic_bottom = uc_tuple[1]
     uc_elastic_thickness = uc_tuple[2]
-    lc_elastic_top = -lc_tuple[0]
-    lc_elastic_bottom =  -lc_tuple[1]
+    lc_elastic_top = lc_tuple[0]
+    lc_elastic_bottom =  lc_tuple[1]
     lc_elastic_thickness = lc_tuple[2]
-    lm_elastic_top = -lm_tuple[0]
-    lm_elastic_bottom =  -lm_tuple[1]
+    lm_elastic_top = lm_tuple[0]
+    lm_elastic_bottom =  lm_tuple[1]
     lm_elastic_thickness = lm_tuple[2]
     print('lat_index', index_lat, 'lon_index', index_lon)
     print('uc', uc_elastic_top, uc_elastic_bottom)
@@ -483,13 +483,31 @@ def plot_yse_chart_data(latitude, longitude, yse_t, yse_c, eet_calc_data, s_max)
             legendgroup='boundary'
         )
         plots.append(boundary_line)
-    plots.append(
-        go.Scatter(
+    plots.extend(
+        [go.Scatter(
             x = np.repeat(s_max, 100),
             y = np.linspace(-180,10,100),
             mode='lines',
             name='s_max',
-            marker={'color': 'rgb(0,109,134)'})
+            marker={'color': 'rgb(0,109,134)'}),
+        go.Scattergl(
+            x = np.repeat(s_max, 2),
+            y=[uc_elastic_top, uc_elastic_bottom],
+            mode='markers',
+            name='uc'
+        ),
+        go.Scattergl(
+            x = np.repeat(s_max, 2),
+            y=[lc_elastic_top, lc_elastic_bottom],
+            mode='markers',
+            name='lc'
+        ),
+        go.Scattergl(
+            x = np.repeat(s_max, 2),
+            y=[lm_elastic_top, lm_elastic_bottom],
+            mode='markers',
+            name='lm'
+        )]
     )
     return plots
 """
