@@ -482,7 +482,6 @@ def plot_yse_chart_data(latitude, longitude, yse_t, yse_c, eet_calc_data, s_max)
             x = x[0],
             y = y[0],
             mode='lines',
-            hoverinfo='skip',
             name=key,
             marker={'color': boundaries[key]['color']},
             legendgroup='boundary'
