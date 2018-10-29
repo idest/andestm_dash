@@ -98,6 +98,21 @@ edf['text'] = edf['place'].astype(str)+'<br>'+\
     'horizontal error: '+edf['horizontalError'].astype(str)+'<br>'+\
     'depth error: '+edf['depthError'].astype(str)
 
+# Earthquakes2
+eq1 = pandas.read_excel("earthquakes/CSN.xlsx", sheet_name="Sheet1")
+eq1 = eq1[eq1['Prof.'] < 200]
+eq1['text'] = eq1['Referencia geográfica'].astype(str)+'<br>'+\
+    'lat: '+eq1['Lat.'].astype(str)+', lon: '+eq1['Lon.'].astype(str)+'<br>'+\
+    'date: '+eq1['Año'].astype(str)+' '+eq1['Mes'].astype(str)+' '+eq1['Día'].astype(str)+'<br>'+\
+    'time: '+eq1['Hora'].astype(str)+' '+eq1['Min.'].astype(str)+' '+eq1['Seg.'].astype(str)+'<br>'+\
+    'magnitude: '+eq1['m1mag'].astype(str)+'<br>'+\
+    'depth: '+eq1['Prof.'].astype(str)+'<br>'+\
+    'type: '+eq1['m1typ'].astype(str)+'<br>'+\
+    'agc: '+eq1['m1agc'].astype(str)
+
+#eq2 = read_excel("earthquakes/CSN.xlsx", sheet_name="Sheet2")
+#eq2 = eq2[eq2['Prof.'] < 200]
+
 print("After Input M.S.:")
 mem()
 mem2()
@@ -159,6 +174,7 @@ def get_moho():
 def get_slab_lab():
     return models.GM.get_slab_lab().mask_irrelevant()
 def get_boundaries():
+    #'icd': {'array': get_icd(), 'color': 'rgb(25,70,180)'},
     boundaries = {
         'topo': {'array': get_topo(), 'color': 'rgb(109,59,15)'},
         'icd': {'array': get_icd(), 'color': 'rgb(154,29,71)'},
@@ -167,6 +183,7 @@ def get_boundaries():
     }
     return boundaries
 def get_layers():
+    #'upper crust': {'color': 'rgb(95,126,206)'},
     layers = {
         'upper crust': {'color': 'rgb(219,151,163)'},
         'lower crust': {'color': 'rgb(224,187,139)'},
@@ -274,9 +291,13 @@ def plot_map_data(latitude, longitude, surface_heat_flow, eet, map_grid,
         text = grid.flatten()
     earthquakes_scatter=[]
     if show_earthquakes == ['SE']:
-        earthquakes = edf[(
-            edf.latitude >= latitude-0.1) & (edf.latitude < (latitude+0.1)
-        )]
+        #earthquakes = edf[(
+        #    edf.latitude >= latitude-0.1) & (edf.latitude < (latitude+0.1)
+        #)]
+        #earthquakes = edf[(
+        #    edf.mag >= 4.0
+        #)]
+        earthquakes = edf
         earthquakes_scatter = go.Scattergeo(
             lon = earthquakes.longitude,
             lat = earthquakes.latitude,
@@ -298,6 +319,7 @@ def plot_map_data(latitude, longitude, surface_heat_flow, eet, map_grid,
             marker = marker,
             showlegend = False,
             geo = 'geo'),
+        earthquakes_scatter,
         go.Scattergeo(
             lon = np.linspace(-81, -59, 100),
             lat = np.repeat(latitude, 100),
@@ -312,10 +334,12 @@ def plot_map_data(latitude, longitude, surface_heat_flow, eet, map_grid,
             marker = {'color': 'blue'},
             hoverinfo = 'skip',
             showlegend = False,
-            ),
-        earthquakes_scatter
+            )
         ]
     )
+
+"""
+"""
 
 def plot_cross_section_data(latitude, longitude, geotherm, yse_t, yse_c,
         cross_section_grid, show_earthquakes):
@@ -376,23 +400,39 @@ def plot_cross_section_data(latitude, longitude, geotherm, yse_t, yse_c,
         )
         plots.append(boundary_line)
     if show_earthquakes == ['SE']:
-        earthquakes = edf[(
-            edf.latitude >= latitude-0.1) & (edf.latitude < (latitude+0.1)
-        )]
+        #earthquakes = edf[(
+        #    edf.latitude >= latitude-0.1) & (edf.latitude < (latitude+0.1)
+        #)]
+        earthquakes = eq1[
+            (eq1['Lat.'] >= latitude-0.1) & (eq1['Lon.'] < latitude+0.1)
+        ]
+        mask_mag = np.isnan(earthquakes['m1mag'])
+        earthquakes.loc[mask_mag, 'm1mag'] = 1 
         earthquakes_scatter = go.Scattergl(
-            x = earthquakes.longitude,
-            y = - earthquakes.depth,
+            #x = earthquakes.longitude,
+            #y = - earthquakes.depth,
+            x = earthquakes['Lon.'],
+            y = -earthquakes['Prof.'],
             #error_y = {'array': earthquakes.depthError},
             #error_x = {'array': earthquakes.horizontalError},
             mode='markers',
             name='earthquakes',
+            #marker={'color': 'black',
+            #    'size': earthquakes.mag, 'sizemode': 'diameter'},
             marker={'color': 'black',
-                'size': earthquakes.mag, 'sizemode': 'diameter'},
+                'size': earthquakes['m1mag'], 'sizemode': 'diameter'},
             hovertext= earthquakes.text,
             hoverinfo='text'
          )
         plots.append(earthquakes_scatter)
     plots.extend([
+        go.Heatmap(
+            x = get_x_axis(),
+            y = get_z_axis(),
+            z = znan,
+            showscale = False,
+            hoverinfo = 'skip'
+            ),
         go.Scatter(
             x=np.repeat(longitude,100),
             y=np.linspace(10,-180,100),
@@ -400,13 +440,6 @@ def plot_cross_section_data(latitude, longitude, geotherm, yse_t, yse_c,
             hoverinfo='skip',
             mode='lines',
             marker={'color':'black'}
-            ),
-        go.Heatmap(
-            x = get_x_axis(),
-            y = get_z_axis(),
-            z = znan,
-            showscale = False,
-            hoverinfo = 'skip'
             )
     ])
     return (
@@ -932,12 +965,12 @@ def map_graph_layout(latitude, longitude):
                 'type': 'mercator',
             },
             'lonaxis': {
-                'range':  [-81.0, -59.0],
+                'range':  [-80.0, -60.0],
                 'showgrid': False,
                 'dtick': 5
             },
             'lataxis': {
-                'range': [-47.0, -9.0],
+                'range': [-46.2, -11.5],
                 'showgrid': False,
                 'dtick': 5,
                 'gridwidth': 2
