@@ -61,7 +61,6 @@ from compute import (
     compute_tm,
     compute_mm
 )
-from setup import data_setup, input_setup
 from compute import SpatialArray3D
 from utils import DotDict, cmap_to_cscale
 from meccolormap import jet_white, jet_white_r
@@ -79,17 +78,14 @@ mem2()
 ###############################################################################
 
 # Static Input
-#gm_data = np.loadtxt('data/Modelo.dat')
-#areas = np.loadtxt('data/areas.dat')
-#trench_age = np.loadtxt('data/PuntosFosaEdad.dat')
-#rhe_data = setup.read_rheo('data/Rhe_Param.dat')
-gm_data, areas, trench_age, rhe_data, coast = data_setup()
-
+gm_data = np.loadtxt('data/Modelo.dat')
+areas = np.loadtxt('data/areas.dat')
+trench_age = np.loadtxt('data/PuntosFosaEdad.dat')
+rhe_data = setup.read_rheo('data/Rhe_Param.dat')
 
 # User Input
-#t_input = setup.readVars('VarTermal.txt')
-#m_input = setup.readVars('VarMecanico.txt')
-t_input, m_input = input_setup()
+t_input = setup.readVars('VarTermal.txt')
+m_input = setup.readVars('VarMecanico.txt')
 
 # Earthquakes
 edf = pandas.read_csv('earthquakes/1900_2018_09_15_25+.csv')
@@ -126,19 +122,19 @@ def generate_input():
     return
 
 # Models Generation
-def compute_models(gm_data, areas, trench_age, rhe_data, coast,
+def compute_models(gm_data, areas, trench_age, rhe_data,
                    t_input=None, m_input=None):
     if t_input is not None and m_input is not None:
         pass
     else:
         t_input, m_input = read_user_input()
-    models_values = compute(gm_data, areas, trench_age, rhe_data, coast,
+    models_values = compute(gm_data, areas, trench_age, rhe_data,
                             t_input, m_input)
     models_keys = ['D', 'CS', 'GM', 'TM', 'MM']
     models = dict(zip(models_keys, models_values))
     return DotDict(models)
 
-models = compute_models(gm_data, areas, trench_age, rhe_data, coast, t_input, m_input)
+models = compute_models(gm_data, areas, trench_age, rhe_data, t_input, m_input)
 
 
 print("After Models M.S.:")
@@ -213,13 +209,11 @@ def get_effective_elastic_thickness(mechanical_model):
     return mechanical_model.get_eet()
 def map_grids(shf=np.asarray(models.TM.get_surface_heat_flow(
     format='positive milliwatts')),
-        eet=np.asarray(models.MM.get_eet()),
-        eet_wrong=np.asarray(models.MM.get_eet_wrong())):
+        eet=np.asarray(models.MM.get_eet())):
     map_grids = {
         'None': None,
         'Surface Heat Flow': shf,
-        'Effective Elastic Thickness': eet,
-        'Effective Elastic Thickness (Wrong)': eet_wrong
+        'Effective Elastic Thickness': eet
     }
     return map_grids
 def cross_section_grids(geotherm=np.asarray(models.TM.get_geotherm()),
@@ -260,9 +254,6 @@ def choose_map_colorscale(map_grid):
     elif map_grid == 'Effective Elastic Thickness':
         color_palette = jet_palette_r()
         color_limits = {'min': 0, 'max': 100}
-    elif map_grid == 'Effective Elastic Thickness (Wrong)':
-        color_palette = jet_palette_r()
-        color_limits = {'min': 0, 'max': 100}
     else:
         color_palette = None
         color_limits = {'min': None, 'max': None}
@@ -281,10 +272,10 @@ def choose_cross_section_colorscale(cross_section_grid):
         color_palette = None
         color_limits = {'min': None, 'max': None}
     return {'color_palette': color_palette, 'color_limits': color_limits}
-def plot_map_data(latitude, longitude, surface_heat_flow, eet, eet_wrong,
-        map_grid, show_earthquakes):
+def plot_map_data(latitude, longitude, surface_heat_flow, eet, map_grid,
+        show_earthquakes):
     colorscale = choose_map_colorscale(map_grid)
-    grid = map_grids(surface_heat_flow, eet, eet_wrong)[map_grid]
+    grid = map_grids(surface_heat_flow, eet)[map_grid]
     if map_grid == 'None':
         marker = {'opacity': 0.2}
         text = None
@@ -457,7 +448,7 @@ def plot_cross_section_data(latitude, longitude, geotherm, yse_t, yse_c,
 
 """
 """
-def plot_yse_chart_data(latitude, longitude, yse_t, yse_c, eet_calc_data, s_max, geotherm):
+def plot_yse_chart_data(latitude, longitude, yse_t, yse_c, eet_calc_data, s_max):
     yse_t[get_3D_grid()[2] == get_slab_lab()[:,:,np.newaxis]] = 0
     yse_c[get_3D_grid()[2] == get_slab_lab()[:,:,np.newaxis]] = 0
     index_lat = np.where(np.isclose(get_y_axis(), latitude))[0][0]
@@ -482,7 +473,6 @@ def plot_yse_chart_data(latitude, longitude, yse_t, yse_c, eet_calc_data, s_max,
     print('lc', lc_elastic_top, lc_elastic_bottom)
     print('lm', lm_elastic_top, lm_elastic_bottom)
     print('eet', eet_calc_data['eet'][index_lon,index_lat])
-    print('eet_wrong', eet_calc_data['eet_wrong'][index_lon,index_lat])
     boundaries = get_boundaries()
     layers = get_layers()
     plots=[]
@@ -503,13 +493,7 @@ def plot_yse_chart_data(latitude, longitude, yse_t, yse_c, eet_calc_data, s_max,
             fill='tozerox',
             fillcolor='rgb(165,165,165)',
             showlegend=False
-        ),
-        go.Scattergl(
-            x=geotherm[:, index_lat, :][index_lon, :],
-            y=get_z_axis(),
-            name='geotherm',
-            marker={'color': 'red'},
-            )]
+        )]
     )
     for i, key in enumerate(boundaries.keys()):
         x = np.linspace(-1000,1000,100),
@@ -650,8 +634,7 @@ def explorer_layout():
         html.Div(jsonpickle.encode({
             'yse_t': np.asarray(models.MM.get_yse()[0]),
             'yse_c': np.asarray(models.MM.get_yse()[1]),
-            'eet': np.asarray(models.MM.get_eet()),
-            'eet_wrong': np.asarray(models.MM.get_eet_wrong())}),
+            'eet': np.asarray(models.MM.get_eet())}),
             id='mechanical_model',
             style={'display':'none'}),
         html.Div(json.dumps({'latitude': -10.}), id='latitude_state',
@@ -814,13 +797,6 @@ def thermal_input_layout():
 
 def mechanical_input_layout():
     return html.Div([
-            dcc.Checklist(
-                id='mechanical_options',
-                options=[
-                    {'label': 'slm', 'value': 'slm'},
-                ],
-                values=[key for key in m_input.keys() if m_input[key] is True]
-                ),
             html.Div([
                 html.Span('Bs_t',style={'display':'inline-block', 'width':'30px'}),
                 html.Div(
@@ -885,18 +861,6 @@ def mechanical_input_layout():
                         options=[{'label':rhe_data[key]['name'],'value':key}
                             for key in rhe_data.keys()],
                         value=m_input.Ml),
-                    style={'display':'inline-block', 'width':'300px',
-                        'margin-left': 20}
-                )
-            ]),
-            html.Div([
-                html.Span('lma', style={'display':'inline-block', 'width':'30px'}),
-                html.Div(
-                    dcc.Dropdown(
-                        id='lma',
-                        options=[{'label':rhe_data[key]['name'],'value':key}
-                            for key in rhe_data.keys()],
-                        value=m_input.Mla),
                     style={'display':'inline-block', 'width':'300px',
                         'margin-left': 20}
                 )
@@ -1027,15 +991,13 @@ def cross_section_graph_layout(latitude, longitude):
     )
 
 def yse_chart_graph_layout(latitude, longitude):
-    max_depth = get_slab_lab().extract_point(latitude=latitude,longitude=longitude)
     return (
         {
         'title': 'Yield Strength Envelope (Lat: {:.1f}, Lon: {:.1f})'
             .format(latitude,longitude),
         'margin': {'t':40},
         'xaxis': {'range': [-1000, 1000.0]},
-        #'yaxis': {'range': [-180.0, 10.0]},
-        'yaxis': {'range': [max_depth, 10.0]},
+        'yaxis': {'range': [-180.0, 10.0]},
         'legend': {'traceorder': 'normal+grouped'}
         }
     )
@@ -1109,20 +1071,17 @@ def update_thermal_state(thermal_options, k_uc, k_lc, k_lm, H_uc, H_lc, H_lm,
 
 @app.callback(
     Output('mechanical_state', 'children'),
-    [Input('mechanical_options', 'values'),
-     Input('Bs_t', 'value'),
+    [Input('Bs_t', 'value'),
      Input('Bs_c', 'value'),
      Input('e', 'value'),
      Input('R', 'value'),
      Input('uc', 'value'),
      Input('lc', 'value'),
      Input('lm', 'value'),
-     Input('lma', 'value'),
      Input('s_max', 'value')]
 )
-def update_mechanical_state(mechanical_options, Bs_t, Bs_c, e, R, uc, lc, lm, lma, s_max):
+def update_mechanical_state(Bs_t, Bs_c, e, R, uc, lc, lm, s_max):
     mechanical_state = {
-        'slm': 'slm' in mechanical_options,
         'Bs_t': Bs_t,
         'Bs_c': Bs_c,
         'e': e,
@@ -1130,7 +1089,6 @@ def update_mechanical_state(mechanical_options, Bs_t, Bs_c, e, R, uc, lc, lm, lm
         'Cs': uc,
         'Ci': lc,
         'Ml': lm,
-        'Mla': lma,
         's_max': s_max,
     }
     return json.dumps(mechanical_state)
@@ -1175,7 +1133,6 @@ def update_mechanical_model(mechanical_state, thermal_model):
     yse_t = np.asarray(mechanical_model.get_yse()[0])
     yse_c = np.asarray(mechanical_model.get_yse()[1])
     eet = np.asarray(mechanical_model.get_eet())
-    eet_wrong = np.asarray(mechanical_model.get_eet_wrong())
     eet_calc_data = mechanical_model.get_eet_calc_data()
     s_max = mechanical_model.vars.s_max
     mechanical_model = 0
@@ -1183,7 +1140,7 @@ def update_mechanical_model(mechanical_state, thermal_model):
     #mem()
     #mem2()
     return jsonpickle.encode({'yse_t': yse_t, 'yse_c': yse_c, 'eet': eet,
-        'eet_wrong': eet_wrong, 'eet_calc_data': eet_calc_data, 's_max': s_max})
+        'eet_calc_data': eet_calc_data, 's_max': s_max})
 
 @app.callback(
     Output('click-data', 'children'),
@@ -1223,11 +1180,10 @@ def update_map(latitude_state, longitude_state, thermal_model, mechanical_model,
     print("update_map called")
     surface_heat_flow = jsonpickle.decode(thermal_model)['surface_heat_flow']
     eet = jsonpickle.decode(mechanical_model)['eet']
-    eet_wrong = jsonpickle.decode(mechanical_model)['eet_wrong']
     longitude = json.loads(longitude_state)['longitude']
     latitude = json.loads(latitude_state)['latitude']
-    data = plot_map_data(latitude, longitude, surface_heat_flow, eet, eet_wrong,
-        map_grid, show_earthquakes)
+    data = plot_map_data(latitude, longitude, surface_heat_flow, eet, map_grid,
+        show_earthquakes)
     layout = map_graph_layout(latitude, longitude)
     figure = {'data': data, 'layout': layout}
     return figure
@@ -1261,23 +1217,20 @@ def update_cross_section(latitude_state, longitude_state, thermal_model,
     Output('yse', 'figure'),
     [Input('latitude_state', 'children'),
      Input('longitude_state', 'children'),
-     Input('mechanical_model', 'children'),
-     Input('thermal_model', 'children')]
+     Input('mechanical_model', 'children')]
      #Input('thermal_state', 'children'),
      #Input('mechanical_state', 'children')]
 )
-def update_yse_chart(latitude_state, longitude_state, mechanical_model, thermal_model):
+def update_yse_chart(latitude_state, longitude_state, mechanical_model):
     mechanical_model = jsonpickle.decode(mechanical_model)
-    thermal_model = jsonpickle.decode(thermal_model)
     s_max = mechanical_model['s_max']
     yse_t = mechanical_model['yse_t']
     yse_c = mechanical_model['yse_c']
     eet_calc_data = mechanical_model['eet_calc_data']
-    geotherm = thermal_model['geotherm']
     latitude = json.loads(latitude_state)['latitude']
     longitude = json.loads(longitude_state)['longitude']
     data = plot_yse_chart_data(latitude, longitude, yse_t, yse_c,
-        eet_calc_data, s_max, geotherm)
+        eet_calc_data, s_max)
     layout = yse_chart_graph_layout(latitude, longitude)
     figure = {'data': data, 'layout': layout}
     return figure

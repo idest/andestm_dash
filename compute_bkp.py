@@ -17,12 +17,13 @@ class Data(object):
         return min_v
 
     def __init__(self, initial_data, slab_lab_areas, trench_age, rheologic_data,
-                 coast, t_input, m_input):
+                 t_input, m_input):
 
         self.coordinate_data = self.__set_coordinate_data(initial_data)
         self.geometric_data = self.__set_geometric_data(initial_data)
+        self.populated_points = np.invert(np.isnan(self
+                                                   .geometric_data.z_slab_lab))
         self.slab_lab_areas = np.asarray(slab_lab_areas, dtype=bool)
-        self.coast = np.asarray(coast)
         self.trench_age = trench_age
         self.rheologic_data = rheologic_data
         self.t_input = t_input
@@ -67,9 +68,9 @@ class Data(object):
     def get_cs_data(self):
         cs_data = {
             'coordinate_data': self.coordinate_data,
-            # geometric data to get relevant_area
-            'geometric_data': self.get_gm_data().geometric_data,
-            'coast': self.coast
+            'populated_points': self.populated_points,
+            'z_slab_lab': self.geometric_data.z_slab_lab,  # to get plates_areas
+            'z_topo': self.geometric_data.z_topo # to get relevant area
         }
         return Box(cs_data)
 
@@ -102,8 +103,8 @@ class CoordinateSystem(object):
 
     def __init__(self, cs_data, xy_step, z_step, z_precision=0):
         self.data = cs_data.coordinate_data
-        self.geometries_not_rounded = cs_data.geometric_data
-        self.coast = cs_data.coast
+        self.z_topo_not_rounded = cs_data.z_topo
+        self.z_slab_lab_not_rounded = cs_data.z_slab_lab
         self.xy_step = xy_step
         self.z_step = z_step
         self.z_precision = z_precision
@@ -116,16 +117,11 @@ class CoordinateSystem(object):
                                       precision=z_precision)
         self.grid_2D = self.__set_grid([self.x_axis, self.y_axis])
         self.grid_3D = self.__set_grid([self.x_axis, self.y_axis, self.z_axis])
-        self.populated_area = self.__set_populated_area()
-        self.sa_plate_area = self.__set_sa_plate_area()
-        self.relevant_area = self.__set_relevant_area(
-            [self.populated_area, self.sa_plate_area])
+        self.populated_points = cs_data.populated_points
+        self.plates_areas = self.__set_plates_areas()
+        self.relevant_area = self.__set_relevant_area(self.populated_points,
+                                                      self.plates_areas)
         self.relevant_volume = self.__set_relevant_volume(self.relevant_area)
-        self.continent_area = self.__set_continent_area()
-        self.relevant_area_eet = self.__set_relevant_area(
-            [self.populated_area, self.sa_plate_area, self.continent_area])
-        self.relevant_volume_eet = self.__set_relevant_volume(
-            self.relevant_area_eet)
 
     def __set_axis(self, max_v, min_v, step, revert=False, precision=None):
         if precision is not None:
@@ -149,44 +145,23 @@ class CoordinateSystem(object):
         grid = np.meshgrid(*[n for n in axes], indexing='ij')
         return grid
 
-    def __set_populated_area(self):
-        slab_lab_valid = np.invert(np.isnan(self.reshape_data(
-            self.geometries_not_rounded.z_slab_lab)))
-        moho_valid = np.invert(np.isnan(self.reshape_data(
-            self.geometries_not_rounded.z_moho)))
-        icd_valid = np.invert(np.isnan(self.reshape_data(
-            self.geometries_not_rounded.z_icd)))
-        topo_valid = np.invert(np.isnan(self.reshape_data(
-            self.geometries_not_rounded.z_topo)))
-        populated_area = np.ones(self.get_2D_shape(), dtype=bool)
-        populated_area[slab_lab_valid == 0] = 0
-        populated_area[moho_valid == 0] = 0
-        populated_area[icd_valid == 0] = 0
-        populated_area[topo_valid == 0] = 0
-        return populated_area
-
-    def __set_sa_plate_area(self):
+    def __set_plates_areas(self):
         """False (0) in Nazca Plate, True (1) in South American Plate"""
-        slab_lab = self.reshape_data(self.geometries_not_rounded.z_slab_lab)
+        slab_lab = self.reshape_data(self.z_slab_lab_not_rounded)
         g = np.gradient(slab_lab, axis=0)
         with np.errstate(invalid='ignore'):  # error_ignore
             high_g = np.absolute(g) > 1  # type: np.ndarray
         trench_start = np.argmax(high_g, axis=0)  # gets first true value
         i_idx = self.get_2D_indexes()[0]
-        sa_plate_area = np.ones(self.get_2D_shape(), dtype=bool)
-        sa_plate_area[i_idx < trench_start] = 0
-        return sa_plate_area
+        plates_area = np.ones(self.get_2D_shape(), dtype=bool)
+        plates_area[i_idx < trench_start] = 0
+        return plates_area
 
-    def __set_continent_area(self):
-        lon = self.get_2D_grid()[0]
-        continent_area = np.zeros(self.get_2D_shape())
-        continent_area[lon >= self.coast[:, 0]] = 1
-        return continent_area
-
-    def __set_relevant_area(self, relevant_areas):
+    def __set_relevant_area(self, populated_points, plates_areas):
+        populated_area = self.reshape_data(populated_points)
         relevant_area = np.ones(self.get_2D_shape(), dtype=bool)
-        for area in relevant_areas:
-            relevant_area[area == 0] = 0
+        relevant_area[populated_area == 0] = 0
+        relevant_area[plates_areas == 0] = 0
         return relevant_area
 
     def __set_relevant_volume(self, relevant_area):
@@ -270,12 +245,6 @@ class CoordinateSystem(object):
 
     def get_relevant_volume(self):
         return SpatialArray3D(self.relevant_volume, self)
-
-    def get_relevant_area_eet(self):
-        return SpatialArray2D(self.relevant_area_eet, self)
-
-    def get_relevant_volume_eet(self):
-        return SpatialArray2D(self.relevant_volume_eet, self)
 
 
 class SpatialArray(np.ndarray):
@@ -368,12 +337,6 @@ class SpatialArray2D(SpatialArray):
         #    masked_array = masked_array.filled(np.nan)
         return masked_array
 
-    def mask_irrelevant_eet(self, nan_fill=False):
-        mask = np.invert(self.cs.get_relevant_area_eet())
-        masked_array = self.copy()
-        masked_array[mask] = np.nan
-        return masked_array
-
     def cross_section(self, latitude=None, longitude=None,
                       lat1=None, lon1=None, lat2=None, lon2=None):
         if self.ndim != 2:
@@ -394,18 +357,6 @@ class SpatialArray2D(SpatialArray):
         elif lat1 and lon1 and lat2 and lon2:
             cross_section = self
         return cross_section
-
-    def extract_point(self, latitude=None, longitude=None):
-        if self.ndim != 2:
-            dims = self.ndim
-            error = ("Array with 2 dimensions expected,",
-                     " array with {} dimensions recieved").format(dims)
-            raise ValueError(error)
-        else:
-            lat_index = np.where(np.isclose(self.cs.get_y_axis(), latitude))[0][0]
-            lon_index = np.where(np.isclose(self.cs.get_x_axis(), longitude))[0][0]
-            point = self[lon_index, lat_index]
-        return point
 
     def divide_by_areas(self, areas):
         array_1, array_2 = super().divide_array_by_areas(self, areas)
@@ -434,12 +385,6 @@ class SpatialArray3D(SpatialArray):
         #masked_array = np.ma.array(self, mask=mask)
         #if nan_fill is True:
         #    masked_array = masked_array.filled(np.nan)
-        return masked_array
-
-    def mask_irrelevant_eet(self, nan_fill=True):
-        mask = np.invert(self.cs.get_relevant_volume_eet())
-        masked_array = self.copy()
-        masked_array[mask] = np.nan
         return masked_array
 
     def extract_surface(self, z_2D):
@@ -533,7 +478,6 @@ class GeometricModel(object):
         self.icd = self.__set_boundary(self.data.z_icd)
         self.topo = self.__set_boundary(self.data.z_topo)
         self.geo_model_3D = self.__set_3D_geometric_model()
-        #TODO: Quizas mover metodos para obtener slab_lab_area a CoordinateSys.
         # Para generar un archivo de areas preliminares
         # self.slab_lab_int_index = self.__set_slab_lab_int_index()
         # self.slab_lab_int_area = self.__set_slab_lab_int_area(save=True)
@@ -568,8 +512,7 @@ class GeometricModel(object):
     def __set_slab_lab_int_index(self):
         # Slab/Lab gradients array
         g = np.gradient(
-            self.cs.reshape_data(self.cs.geometries_not_rounded.z_slab_lab),
-            axis=0)
+            self.cs.reshape_data(self.cs.z_slab_lab_not_rounded), axis=0)
         # Min gradient Indexes
         min_g_idx = np.nanargmin(np.ma.masked_invalid(g), axis=0)
         # Positive gradient boolean array (True where gradient > 0 ...)
@@ -586,23 +529,6 @@ class GeometricModel(object):
         # Z[sli_idx, self.cs.get_2D_indexes()[1][0]] = 1
         # return Z.T
         return sli_idx
-
-    def __set_slab_lab_int_area(self, save=False):
-        sli_idx = self.slab_lab_int_index
-        i_idx = self.cs.get_2D_indexes()[0]
-        sli_area = np.zeros(self.cs.get_2D_shape())
-        # TODO: this moves sli_area 1 index to the right compared with areas.dat
-        # is it necessary?
-        sli_area[i_idx > sli_idx] = 1
-        # TODO: Is sli_ara a typo? It is not returned.
-        sli_ara = np.asarray(sli_area, dtype=bool)
-        if save == True:
-            # Agregar latitudes en la primera columna:
-            # latitudes = self.cs.get_y_axis()
-            # sli_ara = np.r_[latitudes[np.newaxis, :], sli_ara]
-            # np.savetxt('data/preliminar_areas.dat', sli_ara.T, fmt='%2d')
-            np.savetxt('data/preliminar_areas.dat', sli_ara.T, fmt='%.0f')
-        return sli_area
 
     def __set_slab_lab_int_index_from_areas(self):
         sli_idx = np.argmax(self.slab_lab_areas, axis=1)
@@ -623,10 +549,25 @@ class GeometricModel(object):
         sli_topo = self.topo[sli_idx, j_idx]
         return sli_topo
 
+    def __set_slab_lab_int_area(self, save=False):
+        sli_idx = self.slab_lab_int_index
+        i_idx = self.cs.get_2D_indexes()[0]
+        sli_area = np.zeros(self.cs.get_2D_shape())
+        # TODO: this moves sli_area 1 index to the right compared with areas.dat
+        # is it necessary?
+        sli_area[i_idx > sli_idx] = 1
+        # TODO: Is sli_ara a typo? It is not returned.
+        sli_ara = np.asarray(sli_area, dtype=bool)
+        if save == True:
+            # Agregar latitudes en la primera columna:
+            # latitudes = self.cs.get_y_axis()
+            # sli_ara = np.r_[latitudes[np.newaxis, :], sli_ara]
+            # np.savetxt('data/preliminar_areas.dat', sli_ara.T, fmt='%2d')
+            np.savetxt('data/preliminar_areas.dat', sli_ara.T, fmt='%.0f')
+        return sli_area
+
     def set_layer_property(self, cs, ci, ml):
         r = np.ones(self.geo_model_3D.shape) * np.nan
-        if isinstance(cs, np.ndarray) and np.ndim(cs)==1:
-            r = np.repeat(r[:,:,:,np.newaxis], len(cs), axis=3)
         r[self.geo_model_3D == 1] = cs
         r[self.geo_model_3D == 2] = ci
         r[self.geo_model_3D == 3] = ml
@@ -737,11 +678,6 @@ class ThermalModel(object):
         z_topo = z_topo*1.e3
         z_sl = z_sl*1.e3
         heat_flow = -k*(temp_sl/z_sl)- (h*delta)*(np.exp(z_topo/delta)-np.exp(z_sl/delta))
-
-    @staticmethod
-    def __calc_oceanic_plate_thickness(kappa, t):
-        op_thickness = (2.32*np.sqrt(kappa*t))/1.e3
-        return op_thickness
 
     def __init__(self, tm_data, geometric_model, coordinate_system):
         self.geo_model = geometric_model
@@ -939,12 +875,6 @@ class ThermalModel(object):
             surface_heat_flow = surface_heat_flow*-1*1.e3
         return surface_heat_flow
 
-    def get_oceanic_plate_thickness(self):
-        trench_age = self.vars.t
-        kappa = self.vars.kappa
-        op_thickness = self.__calc_oceanic_plate_thickness(kappa,trench_age)
-        return op_thickness
-
     def get_geotherm(self):
         return SpatialArray3D(self.geotherm, self.cs)
 
@@ -962,7 +892,7 @@ class MechanicModel(object):
         return bys
 
     @staticmethod
-    def calc_ductile_yield_strength(es, n, a, h, r, temp):
+    def __calc_ductile_yield_strength(es, n, a, h, r, temp):
         with np.errstate(over='ignore'):
             dys = (es/a)**(1/n)*np.exp(h/(n*r*(temp+273.15)))*1.e-6
         #result = np.empty(temp.shape)
@@ -986,9 +916,8 @@ class MechanicModel(object):
         return depth
 
     @staticmethod
-    def calc_temperature_from_ductile_yield_strength(es, n, a, h, r, dys):
-        #temp = 1/(np.log(dys/(((es/a)**(1/n))*1.e-6))*((n*r)/h))
-        temp = h/(n*r*np.log(dys/(1.e-6*(es/a)**(1/n))))
+    def __calc_temperature_from_ductile_yield_strength(es, n, a, h, r, dys):
+        temp = 1/(np.log(dys/(((es/a)**(1/n))*1.e-6))*((n*r)/h))
         return temp - 273.15
 
     @staticmethod
@@ -1014,11 +943,9 @@ class MechanicModel(object):
         self.vars = Box(self.__set_variables(mm_data.m_input,
                                                  mm_data.rheologic_data))
         self.depth_from_topo = self.__get_depth_from_topo()
-        self.bys_t, self.bys_c = self.__get_brittle_yield_strength()
         self.yse_t, self.yse_c = self.__set_yield_strength_envelope()
         #self.eet, self.eet_calc_data = self.__set_eet(self.yse_t)
-        self.eet, self.eet_wrong, self.eet_calc_data = self.__set_eet_2()
-        self.integrated_strength = self.__set_integrated_strength()
+        self.eet, self.eet_calc_data = self.__set_eet_2()
 
     def __get_rheologic_vars_from_model(self, rock_id):
         rock = RheologicModel.objects.get(name=rock_id)
@@ -1041,7 +968,6 @@ class MechanicModel(object):
     def __set_variables(self, m_input, rhe_data):
         m_input = Box(m_input)
         m_vars = {
-            'slm': m_input['slm'],
             'bs_t': m_input['Bs_t'],
             'bs_c': m_input['Bs_c'],
             'e': m_input['e'],
@@ -1049,8 +975,7 @@ class MechanicModel(object):
             's_max': m_input['s_max'],
             'cs': self.__get_rheologic_vars(m_input['Cs'], rhe_data),
             'ci': self.__get_rheologic_vars(m_input['Ci'], rhe_data),
-            'ml': self.__get_rheologic_vars(m_input['Ml'], rhe_data),
-            'mla': self.__get_rheologic_vars(m_input['Mla'], rhe_data)
+            'ml': self.__get_rheologic_vars(m_input['Ml'], rhe_data)
         }
         return m_vars
 
@@ -1082,36 +1007,12 @@ class MechanicModel(object):
         cs = self.vars.cs
         ci = self.vars.ci
         ml = self.vars.ml
-        mla = self.vars.mla
         # TODO: find a way to not store these next 3D arrays in memory
-        """
         n = self.geo_model.set_layer_property(cs.n, ci.n, ml.n)
         a = self.geo_model.set_layer_property(cs.a, ci.a, ml.a)
         h = self.geo_model.set_layer_property(cs.h, ci.h, ml.h)
-        #Antearco
-        n = self.geo_model.set_layer_property(cs.n, ci.n, mla.n)
-        a = self.geo_model.set_layer_property(cs.a, ci.a, mla.a)
-        h = self.geo_model.set_layer_property(cs.h, ci.h, mla.h)
-        """
-        # 4-Dimensional Array
-        rheo_array_backarc = self.geo_model.set_layer_property(
-            np.array([cs.n, cs.a, cs.h]),
-            np.array([ci.n, ci.a, ci.h]),
-            np.array([ml.n, ml.a, ml.h]))
-        if self.vars.slm is True:
-            rheo_array_forearc = self.geo_model.set_layer_property(
-                np.array([cs.n, cs.a, cs.h]),
-                np.array([ci.n, ci.a, ci.h]),
-                np.array([mla.n, mla.a, mla.h]))
-            rheo_array = SpatialArray.combine_arrays_by_areas(
-                rheo_array_backarc, rheo_array_forearc,
-                self.geo_model.get_slab_lab_int_area().astype(bool))
-        else:
-            rheo_array = rheo_array_backarc
-        n = rheo_array[:,:,:,0]
-        a = rheo_array[:,:,:,1]
-        h = rheo_array[:,:,:,2]
-        dys = self.calc_ductile_yield_strength(e, n, a, h, r, temp)
+
+        dys = self.__calc_ductile_yield_strength(e, n, a, h, r, temp)
         return dys
 
     def __set_yield_strength_envelope(self):
@@ -1186,7 +1087,7 @@ class MechanicModel(object):
         elif layer == 'lc':
             top_boundary = self.geo_model.get_icd()
             bottom_boundary = self.geo_model.get_moho()
-        elif layer == 'lm' or layer == 'flm':
+        elif layer == 'lm':
             top_boundary = self.geo_model.get_moho()
             bottom_boundary = self.geo_model.get_slab_lab()
         top_elastic = np.minimum(top_boundary, bys_depth)
@@ -1198,162 +1099,95 @@ class MechanicModel(object):
         return np.stack((top_elastic, bottom_elastic, thickness), axis=2)
 
     def __set_eet_2(self):
-        s_max = self.vars.s_max
-        # Get depth at which bys reaches s_max
+        # Get depth at which bys reaches 200
         bs_t = self.vars.bs_t
         bs_c = self.vars.bs_c
-        bys_depth_t = self.__calc_depth_from_brittle_yield_strength(
-            bs_t, s_max)
-        bys_depth_c = self.__calc_depth_from_brittle_yield_strength(
-            bs_c, -s_max)
+        bys_depth_t = self.__calc_depth_from_brittle_yield_strength(bs_t, 200)
+        bys_depth_c = self.__calc_depth_from_brittle_yield_strength(bs_c, -200)
         bys_depth_t = self.geo_model.get_topo() - bys_depth_t
         bys_depth_c = self.geo_model.get_topo() - bys_depth_c
-        # Get temperature at which dys reaches s_max
+        # Get temperature at which dys reaches 200
         e = self.vars.e
         r = self.vars.r
         uc = self.vars.cs
         lc = self.vars.ci
-        blm = self.vars.ml
-        flm = self.vars.mla
-        temp_uc = self.calc_temperature_from_ductile_yield_strength(
-            e, uc.n, uc.a, uc.h, r, s_max)
-        temp_lc = self.calc_temperature_from_ductile_yield_strength(
-            e, lc.n, lc.a, lc.h, r, s_max)
-        temp_blm = self.calc_temperature_from_ductile_yield_strength(
-            e, blm.n, blm.a, blm.h, r, s_max)
-        if self.vars.slm is True:
-            temp_flm = self.calc_temperature_from_ductile_yield_strength(
-                e, flm.n, flm.a, flm.h, r, s_max)
-            dys_temp = np.array([temp_uc, temp_lc, temp_blm, temp_flm])
-            dys_depth = np.empty((*self.cs.get_2D_shape(),4))
-        else:
-            dys_temp = np.array([temp_uc, temp_lc, temp_blm])
-            dys_depth = np.empty((*self.cs.get_2D_shape(),3))
-        # Interpolate depth to get exact depth of the ductile yield temperature
-        # (Depth at wich dys reaches s_max)
+        lm = self.vars.ml
+        temp_uc = self.__calc_temperature_from_ductile_yield_strength(
+            e, uc.n, uc.a, uc.h, r, 200)
+        temp_lc = self.__calc_temperature_from_ductile_yield_strength(
+            e, lc.n, lc.a, lc.h, r, 200)
+        temp_lm = self.__calc_temperature_from_ductile_yield_strength(
+            e, lm.n, lm.a, lm.h, r, 200)
+        #dys_temp = np.array([temp_uc, temp_lc, temp_lm])
         idxs = SpatialArray3D(self.cs.get_3D_indexes()[2], self.cs)
         idxs = idxs.astype(np.float).mask_irrelevant()
-        top_idx = np.nan_to_num(
-            idxs.extract_surface(self.geo_model.get_topo()))
-        bottom_idx = np.nan_to_num(
-            idxs.extract_surface(self.geo_model.get_slab_lab()))
+        top_idx = np.nan_to_num(idxs.extract_surface(self.geo_model.get_topo()))
         top_idx = top_idx.astype(int)
+        bottom_idx = np.nan_to_num(idxs.extract_surface(self.geo_model.get_slab_lab()))
         bottom_idx = bottom_idx.astype(int)
         depth = self.cs.get_3D_grid()[2]
         geotherm = self.geotherm
+        dys_depth = np.empty((*self.cs.get_2D_shape(),3))
+        print(dys_depth.shape)
         dys_depth[:,:] = np.nan
         for i in np.arange(idxs.shape[0]):
             for j in np.arange(idxs.shape[1]):
-                if (np.isnan(idxs[i,j,0]) == False
-                        and (top_idx[i,j] < bottom_idx[i,j])):
-                    dys_depth[i,j,:] = np.interp(dys_temp,
+                if np.isnan(idxs[i,j,0]) == False and top_idx[i,j] < bottom_idx[i,j]:
+                    dys_depth[i,j,:] = np.interp(np.array([temp_uc, temp_lc, temp_lm]),
                         geotherm[i,j,top_idx[i,j]:bottom_idx[i,j]],
                         depth[i,j,top_idx[i,j]:bottom_idx[i,j]],
                         left=np.inf, right=-np.inf)
-        # Get values of intersection between YSE with s_max,
-        # and the elastic thickness for each litospheric layer
-        uc_tuple = self.get_layer_elastic_tuple(
-            bys_depth_c, dys_depth[:,:,0], 'uc')
-        lc_tuple = self.get_layer_elastic_tuple(
-            bys_depth_c, dys_depth[:,:,1], 'lc')
-        blm_tuple = self.get_layer_elastic_tuple(
-            bys_depth_c, dys_depth[:,:,2], 'lm')
-        if self.vars.slm is True:
-            flm_tuple = self.get_layer_elastic_tuple(
-                bys_depth_c, dys_depth[:,:,3], 'lm')
-            lm_tuple = SpatialArray.combine_arrays_by_areas(
-                blm_tuple, flm_tuple,
-                self.geo_model.get_slab_lab_int_area().astype(bool))
-        else:
-            lm_tuple = blm_tuple
-        # Get the coupled and decoupled zones for moho and icd
+        uc_tuple = self.get_layer_elastic_tuple(bys_depth_c, dys_depth[:,:,0], 'uc')
+        lc_tuple = self.get_layer_elastic_tuple(bys_depth_c, dys_depth[:,:,1], 'lc')
+        lm_tuple = self.get_layer_elastic_tuple(bys_depth_c, dys_depth[:,:,2], 'lm')
         share_moho = lc_tuple[:, :, 1] == lm_tuple[:, :, 0]
         share_icd = uc_tuple[:, :, 1] == lc_tuple[:, :, 0]
-        layers_thickness_i = np.stack(
+        layers_thickness = np.stack(
             (uc_tuple[:,:,2], lc_tuple[:,:,2], lm_tuple[:,:,2]), axis=2)
-        # If icd is coupled sum thickness of upper crust with lower crust
+
         coupled_icd_ths, decoupled_icd_ths = SpatialArray.divide_array_by_areas(
-            layers_thickness_i, share_icd)
+            layers_thickness, share_icd)
         coupled_icd_ths[:,:,1] = coupled_icd_ths[:,:,0] + coupled_icd_ths[:,:,1]
         coupled_icd_ths[:,:,0] = 0
         layers_thickness = SpatialArray.combine_arrays_by_areas(
             coupled_icd_ths, decoupled_icd_ths, share_icd)
-        # If moho is coupled sum thickness of lower crust with litospheric mantle
         coupled_moho_ths, decoupled_moho_ths = SpatialArray.divide_array_by_areas(
             layers_thickness, share_moho)
         coupled_moho_ths[:,:,2] = coupled_moho_ths[:,:,1] + coupled_moho_ths[:,:,2]
         coupled_moho_ths[:,:,1] = 0
         layers_thickness = SpatialArray.combine_arrays_by_areas(
             coupled_moho_ths, decoupled_moho_ths, share_moho)
-        ##### TEMPORAL #####
-        # Metodo erroneo para calcular EET
-        # If moho is decoupled separate the model in 3 layers or 2 layers (when icd coupled)
-        coupled_ths_2, decoupled_ths_2 = SpatialArray.divide_array_by_areas(
-            layers_thickness_i, share_moho)
+        eet = self.__calc_eet_detached(layers_thickness)
+        """
+        coupled_ths, decoupled_ths = SpatialArray.divide_array_by_areas(
+            layers_thickness, share_moho)
         decoupled_ths_2l, decoupled_ths_3l = SpatialArray.divide_array_by_areas(
-            decoupled_ths_2, share_icd)
-        # If icd is coupled (2 layers) sum thickness of upper crust with lower crust
+            decoupled_ths, share_icd)
         decoupled_ths_2l[:,:,1] = decoupled_ths_2l[:,:,0] + decoupled_ths_2l[:,:,1]
         decoupled_ths_2l[:,:,0] = np.nan
-        decoupled_ths_2 = SpatialArray.combine_arrays_by_areas(
+        decoupled_ths = SpatialArray.combine_arrays_by_areas(
             decoupled_ths_2l, decoupled_ths_3l, share_icd)
-        # Calculate eet differently for the coupled and decoupled moho
-        eet_coupled = self.__calc_eet_attached(coupled_ths_2)
-        eet_decoupled = self.__calc_eet_detached(decoupled_ths_2)
-        eet_wrong = SpatialArray.combine_arrays_by_areas(
+        eet_coupled = self.__calc_eet_attached(coupled_ths)
+        eet_decoupled = self.__calc_eet_detached(decoupled_ths)
+        eet = SpatialArray.combine_arrays_by_areas(
             eet_coupled, eet_decoupled, share_moho)
-        ##### FIN TEMPORAL #####
-        # If topo is at less than 50 km. from slab, add oceanic plate thickness
-        # to litospheric mantle thickness
-        #diff = self.geo_model.get_topo() - self.geo_model.get_slab_lab()
-        #op_points = diff <= 50
-        #op_points_thickness = (
-        #    op_points * self.thermal_model.get_oceanic_plate_thickness())
-        #ths_plus_op, ths = SpatialArray.divide_array_by_areas(
-        #    layers_thickness, op_points)
-        #ths_plus_op[:,:,2] = np.nansum(
-        #    np.dstack((ths_plus_op[:,:,2], op_points_thickness)), 2) 
-        #layers_thickness = SpatialArray.combine_arrays_by_areas(
-        #    ths_plus_op, ths, op_points)
-        ## Calculate eet according to formula
-        eet = self.__calc_eet_detached(layers_thickness)
-
+        """
         eet_calc_data = {
             'uc_tuple': uc_tuple,
             'lc_tuple': lc_tuple,
             'lm_tuple': lm_tuple,
             'share_icd': SpatialArray2D(share_icd, self.cs),
             'share_moho': SpatialArray2D(share_moho, self.cs),
-            'bys_depth_t': bys_depth_t,
-            'bys_depth_c': bys_depth_c,
-            'dys_depth': dys_depth,
-            'dys_temp': dys_temp,
-            'layers_thickness': layers_thickness,
-            'eet': np.asarray(eet),
-            'eet_wrong': np.asarray(eet_wrong)
+            'eet': np.asarray(eet)
         }
-        return eet, eet_wrong, eet_calc_data
-
-    def __set_integrated_strength(self):
-        yse_c = self.yse_c
-        geo_model_mask = np.isnan(self.geo_model.get_3D_geometric_model())
-        integrated_strength = np.trapz(
-            np.ma.array(yse_c,mask=geo_model_mask), axis=2)
-        return integrated_strength
+        return eet, eet_calc_data
 
     def get_yse(self):
         return (SpatialArray3D(self.yse_t, self.cs),
                 SpatialArray3D(self.yse_c, self.cs))
 
     def get_eet(self):
-        return SpatialArray2D(self.eet, self.cs).mask_irrelevant_eet()
-
-    def get_eet_wrong(self):
-        return SpatialArray2D(self.eet_wrong, self.cs).mask_irrelevant_eet()
-
-    def get_integrated_strength(self):
-        return SpatialArray2D(
-            self.integrated_strength, self.cs).mask_irrelevant_eet()
+        return SpatialArray2D(self.eet, self.cs)
 
     def get_eet_calc_data(self):
         return self.eet_calc_data
@@ -1365,10 +1199,8 @@ class MechanicModel(object):
         return self.cs
 
 
-def compute(gm_data, slab_lab_areas, trench_age, rhe_data, coast,
-        t_input, m_input):
-    d = Data(gm_data, slab_lab_areas, trench_age, rhe_data, coast,
-        t_input, m_input)
+def compute(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input):
+    d = Data(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input)
     cs_d = d.get_cs_data()
     gm_d = d.get_gm_data()
     tm_d = d.get_tm_data()
@@ -1379,8 +1211,8 @@ def compute(gm_data, slab_lab_areas, trench_age, rhe_data, coast,
     mm = MechanicModel(mm_d, gm, tm.get_geotherm(), cs)
     return d, cs, gm, tm, mm
 
-def compute_data(gm_data, slab_lab_areas, trench_age, rhe_data, coast, t_input, m_input):
-    d = Data(gm_data, slab_lab_areas, trench_age, rhe_data, coast, t_input, m_input)
+def compute_data(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input):
+    d = Data(gm_data, slab_lab_areas, trench_age, rhe_data, t_input, m_input)
     cs_d = d.get_cs_data()
     gm_d = d.get_gm_data()
     tm_d = d.get_tm_data()

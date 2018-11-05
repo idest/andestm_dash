@@ -95,4 +95,20 @@ def read_rheo(name):
 
     return DotDict(dic)
 
+def data_setup():
+    gm_data = np.loadtxt('data/Modelo.dat')
+    areas = np.loadtxt('data/areas.dat')
+    trench_age = np.loadtxt('data/PuntosFosaEdad.dat')
+    rhe_data = read_rheo('data/Rhe_Param_ordenado_nuevos_indices.dat')
+    coast = np.loadtxt('data/coast.dat')
+    return gm_data, areas, trench_age, rhe_data, coast
 
+def input_setup():
+    t_input = readVars('VarTermal.txt')
+    m_input = readVars('VarMecanico.txt')
+    return t_input, m_input
+
+def exec_setup():
+    exec_input = readVars('VarExec.txt')
+    direTer, direMec = makeDirs(exec_input.temcaso, exec_input.meccaso)
+    return exec_input, direTer, direMec

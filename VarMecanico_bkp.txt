@@ -7,14 +7,11 @@
 #------------------------------------------------------------------------------
 #    Valor  Nombre   Descripcion
 #    -----  ------   -----------
-     False  slm      Considerar manto litosférico serpentinizado en antearco
-#    -----  ------   -----------
      20.e3  Bs_t     Constante de tension de Byerlee (MPa)
     -55.e3  Bs_c     Constante de compresion de Byerlee (MPa)
      1e-15  e        Strain rate (s-1)
       8.31  R        Constante universal de gases (J mol-1 K-1)
-         6  Cs       Modelo reologico de la corteza superior
-        12  Ci       Modelo reologico de la corteza inferior
-        30  Ml       Modelo reologico del manto litosférico
-        23  Mla      Modelo reologico del manto litosférico en el antearco
+         9  Cs       Modelo reologico de la corteza superior
+        28  Ci       Modelo reologico de la corteza inferior
+        22  Ml       Modelo reologico del manto litosférico
        200  s_max    Maximo Stress Disponible
