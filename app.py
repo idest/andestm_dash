@@ -189,9 +189,9 @@ def get_boundaries():
 def get_layers():
     #'upper crust': {'color': 'rgb(95,126,206)'},
     layers = {
-        'upper crust': {'color': 'rgb(219,151,163)'},
-        'lower crust': {'color': 'rgb(224,187,139)'},
-        'litospheric mantle': {'color': 'rgb(181,189,137)'},
+        'upper crust': {'color': 'rgb(219,151,163)'}, #db97a3
+        'lower crust': {'color': 'rgb(224,187,139)'}, #e0bb8b
+        'litospheric mantle': {'color': 'rgb(181,189,137)'}, #b5bd89
     }
     return layers
 def get_geometry():
